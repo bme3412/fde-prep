@@ -1,7 +1,8 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
-  --background: #ffffff;
+  --background: #fafafa;
   --foreground: #171717;
 }
 
@@ -12,15 +13,101 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── Guide prose overrides ─────────────────────────────────────────────── */
+
+.guide-prose {
+  line-height: 1.7;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.guide-prose code {
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #18181b;
+}
+
+.guide-prose pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+
+  font-size: 0.875em;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+
+@media (min-width: 640px) {
+  .guide-prose pre {
+    padding: 16px;
+    font-size: 0.938em;
+  }
+}
+
+.guide-prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-weight: normal;
+}
+
+.guide-prose ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 8px 0;
+}
+
+.guide-prose ul li {
+  margin: 4px 0;
+}
+
+.guide-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 8px 0;
+}
+
+.guide-prose ol li {
+  margin: 4px 0;
+}
+
+.guide-prose p {
+  margin: 8px 0;
+}
+
+.guide-prose strong {
+  font-weight: 700;
+  color: #18181b;
+}
+
+.guide-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 0.85em;
+}
+
+.guide-prose th,
+.guide-prose td {
+  border: 1px solid #e4e4e7;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.guide-prose th {
+  background: #f4f4f5;
+  font-weight: 600;
 }
