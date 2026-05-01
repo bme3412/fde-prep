@@ -1,5 +1,12 @@
-import { v4 as uuid } from "uuid";
 import type { AppState, Topic, PracticeRep, Category, Resource } from "./types";
+
+/** Derive a stable, URL-safe slug from a title. */
+function slug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
 
 function topic(
   title: string,
@@ -9,7 +16,7 @@ function topic(
   resources: Resource[],
 ): Topic {
   return {
-    id: uuid(),
+    id: slug(title),
     title,
     category,
     description,
@@ -23,7 +30,7 @@ function topic(
 
 function rep(title: string, promptMarkdown: string, durationMinutes: number): PracticeRep {
   return {
-    id: uuid(),
+    id: slug(title),
     title,
     promptMarkdown,
     durationMinutes,
