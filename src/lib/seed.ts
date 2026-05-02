@@ -253,6 +253,26 @@ export function seedState(): AppState {
       ],
     ),
 
+    // ── Developer Tools ─────────────────────────────────────────────────
+    topic(
+      "git patterns for collaborative work",
+      "developer_tools",
+      "Master branching, rebasing, stashing, cherry-pick, bisect, and reflog. Know how to untangle messy histories, stage with precision, and work confidently with remotes. You can't fumble git in a live customer session.",
+      75,
+      [
+        { label: "Pro Git book", url: "https://git-scm.com/book/en/v2" },
+      ],
+    ),
+    topic(
+      "bash scripting & CLI fluency",
+      "developer_tools",
+      "Fluency with pipes, redirects, grep/sed/awk, find/xargs, jq, curl, and bash scripting patterns (loops, conditionals, error handling). Critical for SSH debugging sessions, quick data munging, and writing deployment scripts.",
+      75,
+      [
+        { label: "GNU Bash manual", url: "https://www.gnu.org/software/bash/manual/bash.html" },
+      ],
+    ),
+
     // ── Research Reading ─────────────────────────────────────────────────
     topic(
       "Constitutional AI paper",

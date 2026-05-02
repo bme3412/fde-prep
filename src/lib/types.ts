@@ -8,6 +8,7 @@ export const CATEGORIES = [
   "evals",
   "retrieval",
   "enterprise_deployment",
+  "developer_tools",
   "research",
   "practice_reps",
 ] as const;
@@ -21,6 +22,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   evals: "Evals",
   retrieval: "Retrieval",
   enterprise_deployment: "Enterprise Deployment",
+  developer_tools: "Developer Tools",
   research: "Research Reading",
   practice_reps: "Practice Reps",
 };
