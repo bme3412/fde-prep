@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type {
   CodePredict as CodePredictData,
   ScenarioPredict as ScenarioPredictData,
@@ -298,7 +299,7 @@ export function MiniChallenge({ data }: { data: MiniChallengeData }) {
       <div className="p-4 sm:p-5 space-y-5">
         {/* Prompt */}
         <div className="guide-prose text-sm text-zinc-700">
-          <Markdown>{data.prompt}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{data.prompt}</Markdown>
         </div>
 
         {/* Hints */}
@@ -364,7 +365,7 @@ export function MiniChallenge({ data }: { data: MiniChallengeData }) {
 export function Prose({ markdown }: { markdown: string }) {
   return (
     <div className="guide-prose text-sm text-zinc-700 leading-relaxed">
-      <Markdown>{markdown}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm]}>{markdown}</Markdown>
     </div>
   );
 }
@@ -378,7 +379,7 @@ export function KeyInsightBlock({ data }: { data: KeyInsightData }) {
         {data.label}
       </div>
       <div className="guide-prose text-sm text-zinc-800 leading-relaxed">
-        <Markdown>{data.insight}</Markdown>
+        <Markdown remarkPlugins={[remarkGfm]}>{data.insight}</Markdown>
       </div>
     </div>
   );
@@ -493,7 +494,7 @@ export function WarmUpBlock({ data }: { data: WarmUpData }) {
       <CardHeader dot="bg-emerald-500" label="Try It" meta={data.title} />
       <div className="p-4 sm:p-5 space-y-3">
         <div className="guide-prose text-sm text-zinc-700">
-          <Markdown>{data.prompt}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{data.prompt}</Markdown>
         </div>
         {!revealed ? (
           <>
