@@ -16,14 +16,18 @@ export const bashGuide: StudyGuide = {
 
 Bash fluency is about **speed and confidence**. The commands themselves are simple, but stringing them together — pipes, redirects, loops, conditionals, \`jq\`, \`curl\` — is what separates someone who *can* use a terminal from someone who *lives* in one.
 
+Why bash specifically? Because it is **everywhere**. Every Linux server, every macOS machine, every Docker container, every CI/CD runner. Python might be more elegant, but bash is already installed, already running, and requires zero setup. When you SSH into a customer's production box at 2 AM, bash is what you have.
+
 This guide is structured around the patterns you will actually use on the job:
 
 - **Pipes & redirects** — chaining tools together
 - **grep / sed / awk** — slicing through log files
 - **find & xargs** — batch operations across file trees
 - **Variables, loops, conditionals** — writing quick scripts
+- **Command & process substitution** — capturing output inline
+- **String manipulation** — parameter expansion patterns
 - **jq & curl** — working with APIs from the terminal
-- **Error handling** — writing scripts that fail safely
+- **Error handling & signals** — writing scripts that fail safely and clean up after themselves
 - **Environment variables** — managing config and secrets
 
 Every section has predict-the-output exercises. Cover the output, think, then check. That is the fastest path to fluency.`,
@@ -49,7 +53,9 @@ Every section has predict-the-output exercises. Cover the output, think, then ch
 
 The **pipe** (\`|\`) connects the stdout of one command to the stdin of the next. The **redirect** (\`>\`, \`>>\`, \`2>\`) sends a stream to a file instead of the terminal.
 
-This is the Unix philosophy in action: small tools that each do one thing, composed via pipes.`,
+Think of it physically: every program is a box with an "in" hole, an "out" hole, and an "error" hole. A pipe is a tube connecting one box's "out" to the next box's "in." A redirect plugs a file into one of those holes instead of the default terminal.
+
+This is the Unix philosophy in action: small tools that each do one thing, composed via pipes. \`grep\` does not know how to count lines — that is \`wc\`'s job. \`sort\` does not know how to deduplicate — that is \`uniq\`'s job. You compose them.`,
         },
         {
           kind: "code_predict",
@@ -96,9 +102,26 @@ cat output.txt`,
           explanation: `2>&1 means "send file descriptor 2 (stderr) to wherever file descriptor 1 (stdout) is going." Since stdout is already redirected to output.txt, stderr goes there too. Without 2>&1, the error message would print to the terminal instead of the file.`,
         },
         {
+          kind: "code_predict",
+          label: "tee: writing to a file AND the terminal",
+          code: `echo "Hello World" | tee output.txt | wc -c`,
+          output: `12`,
+          explanation: `tee copies stdin to both a file AND stdout. Here "Hello World\\n" (12 bytes including the newline) is written to output.txt AND piped to wc -c. This is essential when you want to save output while also processing it further in the pipeline. Without tee, you would have to choose between redirecting to a file or piping.`,
+        },
+        {
+          kind: "code_predict",
+          label: "here-strings with <<<",
+          code: `# Feed a string directly as stdin (no echo | needed)
+grep -o "world" <<< "hello world"`,
+          output: `world`,
+          explanation: `<<< feeds a string to a command's stdin without needing echo and a pipe. It is cleaner and more efficient than echo "hello world" | grep -o "world". The -o flag makes grep print only the matching portion.`,
+        },
+        {
           kind: "key_insight",
           label: "Unix philosophy",
-          insight: `Pipes are the glue of Unix. Each command does one small thing well (filter, transform, count, sort). You compose them into powerful pipelines. This is why \`grep | sort | uniq -c | sort -rn\` can replace a 50-line Python script.`,
+          insight: `Pipes are the glue of Unix. Each command does one small thing well (filter, transform, count, sort). You compose them into powerful pipelines. This is why \`grep | sort | uniq -c | sort -rn\` can replace a 50-line Python script.
+
+The core building blocks: \`cat\` reads, \`grep\` filters, \`sed\` transforms, \`awk\` extracts, \`sort\` orders, \`uniq\` deduplicates, \`wc\` counts, \`head\`/\`tail\` trims, \`tee\` duplicates. Learn these ten commands and you can build almost any text-processing pipeline.`,
         },
       ],
     },
@@ -113,11 +136,13 @@ cat output.txt`,
           kind: "prose",
           markdown: `These three commands handle 90% of text processing tasks in the terminal:
 
-- **grep** — **search** for lines matching a pattern
-- **sed** — **transform** text (substitutions, deletions)
-- **awk** — **extract** and process columns/fields
+- **grep** — **search** for lines matching a pattern (\`grep\` = "Global Regular Expression Print")
+- **sed** — **transform** text (substitutions, deletions) (\`sed\` = "Stream Editor")
+- **awk** — **extract** and process columns/fields (\`awk\` = named after its creators: Aho, Weinberger, Kernighan)
 
-Master these and you can tear through any log file.`,
+The mental model: **grep filters rows, awk filters columns, sed transforms content.** When you need to find lines, use grep. When you need to pull specific fields from structured output, use awk. When you need to replace or delete text, use sed.
+
+Master these and you can tear through any log file. In a real FDE scenario, you will often chain all three: grep to narrow down to relevant lines, awk to extract a specific field, sed to clean up the output.`,
         },
         {
           kind: "code_predict",
@@ -192,6 +217,57 @@ awk '{print $1, $4}' access.log`,
           explanation: `awk splits each line on whitespace by default. $1 is the first field (IP), $4 is the fourth (status code). $0 would be the entire line. This is the fastest way to extract columns from structured text.`,
         },
         {
+          kind: "code_predict",
+          label: "sed — delete lines matching a pattern",
+          code: `# config.txt contains:
+# host=localhost
+# # This is a comment
+# port=8080
+# # Another comment
+# debug=true
+
+sed '/^#/d' config.txt`,
+          output: `host=localhost
+port=8080
+debug=true`,
+          explanation: `sed '/pattern/d' deletes lines matching the pattern. ^# matches lines starting with #. This is useful for stripping comments from config files. The original file is unchanged — sed outputs to stdout by default.`,
+        },
+        {
+          kind: "code_predict",
+          label: "awk with conditions and built-in variables",
+          code: `# access.log contains:
+# 192.168.1.1 GET /api/users 200 45ms
+# 192.168.1.2 POST /api/login 401 12ms
+# 192.168.1.1 GET /api/data 500 230ms
+# 192.168.1.3 GET /api/users 200 89ms
+
+awk '$4 >= 400 {print $1, $2, $3, "->", $4}' access.log`,
+          output: `192.168.1.2 POST /api/login -> 401
+192.168.1.1 GET /api/data -> 500`,
+          explanation: `awk can filter rows with conditions before the action block. $4 >= 400 matches only lines where the 4th field (status code) is 400 or higher. This is like a WHERE clause in SQL — awk is surprisingly powerful for structured data.`,
+        },
+        {
+          kind: "code_predict",
+          label: "chaining grep, awk, and sort together",
+          code: `# server.log contains:
+# 2024-01-15 10:00 ERROR [db] timeout after 5000ms
+# 2024-01-15 10:01 INFO  [api] request completed
+# 2024-01-15 10:02 ERROR [auth] invalid token
+# 2024-01-15 10:03 ERROR [db] connection refused
+# 2024-01-15 10:04 ERROR [auth] expired session
+# 2024-01-15 10:05 ERROR [db] timeout after 3000ms
+
+grep ERROR server.log | awk '{print $4}' | sort | uniq -c | sort -rn`,
+          output: `   3 [db]
+   2 [auth]`,
+          explanation: `This is the classic "top N" pipeline. grep filters to error lines, awk extracts the component field, sort groups identical values together (required by uniq), uniq -c counts consecutive duplicates, and sort -rn ranks by count descending. This pattern answers "what is breaking the most?"`,
+        },
+        {
+          kind: "key_insight",
+          label: "grep filters rows, awk filters columns",
+          insight: `Think of your data as a table. \`grep\` selects which **rows** to keep (like SQL WHERE). \`awk\` selects which **columns** to show (like SQL SELECT). \`sed\` transforms **cell values** (like SQL UPDATE). When you need to find lines with errors, extract the timestamp column, and reformat the date — that is grep | awk | sed.`,
+        },
+        {
           kind: "warm_up",
           title: "count errors in a log",
           prompt: `Write a one-liner that counts how many lines in \`app.log\` contain the word "ERROR" (case-sensitive).`,
@@ -209,7 +285,11 @@ awk '{print $1, $4}' access.log`,
       blocks: [
         {
           kind: "prose",
-          markdown: `\`find\` locates files. \`xargs\` feeds those files to another command. Together they let you perform batch operations across an entire directory tree.`,
+          markdown: `\`find\` locates files by name, type, size, modification time, and other attributes. \`xargs\` takes a list of items (typically filenames) from stdin and passes them as arguments to another command. Together they let you perform batch operations across an entire directory tree.
+
+Why not just use \`ls\` or shell globs? Globs like \`*.py\` only match in the current directory. \`find\` walks the entire tree recursively and supports filters that globs cannot express (modification time, file size, permissions). And unlike \`ls\`, \`find\` outputs clean paths suitable for piping to other commands.
+
+The key pattern: **find locates, xargs acts**. Find produces a list of paths; xargs feeds that list to whatever command you need to run on them.`,
         },
         {
           kind: "code_predict",
@@ -265,6 +345,34 @@ find src/ -name "*.py" -type f | xargs wc -l | tail -1`,
           takeaway: `xargs batches arguments for efficiency. Use -exec when you need per-file logic (like renaming). Use xargs when you just need to feed files to a command.`,
         },
         {
+          kind: "code_predict",
+          label: "find with -size and multiple conditions",
+          code: `# Find large log files that haven't been modified recently
+find /var/log -name "*.log" -size +100M -mtime +30 -type f`,
+          output: `/var/log/old-app.log
+/var/log/archive/debug.log`,
+          explanation: `-size +100M finds files larger than 100 megabytes. -mtime +30 means "modified more than 30 days ago." Multiple conditions are AND'd together by default. This is the standard pattern for disk cleanup — find old, large files that are safe to remove.`,
+        },
+        {
+          kind: "code_predict",
+          label: "xargs with -I for placeholders",
+          code: `# Create a backup of each config file
+find /etc/app -name "*.conf" -type f | xargs -I{} cp {} {}.backup`,
+          output: `(no output — creates .backup copies of each file)`,
+          explanation: `-I{} tells xargs to replace {} with each input item. This lets you use the filename in multiple positions within the command. Without -I, xargs just appends items to the end of the command.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Handle spaces in filenames",
+          insight: `Filenames with spaces break the basic \`find | xargs\` pattern because xargs splits on whitespace by default. Use the null-delimiter combo to handle any filename safely:
+
+\`\`\`bash
+find . -name "*.log" -print0 | xargs -0 rm
+\`\`\`
+
+\`-print0\` separates filenames with null bytes instead of newlines. \`-0\` tells xargs to expect null-delimited input. Always use this pattern in production scripts where you cannot control filenames.`,
+        },
+        {
           kind: "warm_up",
           title: "delete all .pyc files",
           prompt: `Write a command to find and delete all \`.pyc\` files under the current directory.`,
@@ -282,7 +390,15 @@ find src/ -name "*.py" -type f | xargs wc -l | tail -1`,
       blocks: [
         {
           kind: "prose",
-          markdown: `Bash scripts need variables, loops, and conditionals just like any programming language. The syntax has a few gotchas that trip up newcomers — especially around spacing.`,
+          markdown: `Bash scripts need variables, loops, and conditionals just like any programming language. The syntax has a few gotchas that trip up newcomers — especially around spacing and quoting.
+
+The golden rules:
+- **No spaces around \`=\` in assignments** — \`NAME="Alice"\` not \`NAME = "Alice"\`
+- **Always double-quote variables** — \`"$var"\` not \`$var\` (prevents word splitting)
+- **Use \`[[ ]]\` not \`[ ]\`** — double brackets are safer, more powerful, and bash-specific
+- **Use \`\$(command)\` not backticks** — easier to read and nest
+
+If you remember nothing else from this section, remember the quoting rule: **when in doubt, double-quote it**. Unquoted variables are the source of most bash bugs.`,
         },
         {
           kind: "code_predict",
@@ -332,6 +448,55 @@ else
 fi`,
           output: `Config found`,
           explanation: `[[ -f "$FILE" ]] tests if the file exists and is a regular file. Other useful tests: -d (directory exists), -z (string is empty), -n (string is non-empty), -eq/-lt/-gt (numeric comparison).`,
+        },
+        {
+          kind: "code_predict",
+          label: "while read loop — processing lines from a file",
+          code: `# users.csv contains:
+# alice,admin
+# bob,user
+# carol,admin
+
+while IFS=',' read -r name role; do
+  echo "$name is a $role"
+done < users.csv`,
+          output: `alice is a admin
+bob is a user
+carol is a admin`,
+          explanation: `while read loops are the standard way to process a file line by line. IFS=',' sets the field separator to comma. -r prevents backslash interpretation. The < users.csv at the end redirects the file into the entire loop's stdin. This pattern is safer than for-looping over \$(cat file) because it handles spaces and special characters correctly.`,
+        },
+        {
+          kind: "code_predict",
+          label: "case statement — cleaner than if/elif chains",
+          code: `ENVIRONMENT="production"
+
+case "$ENVIRONMENT" in
+  production)
+    echo "Using prod database"
+    ;;
+  staging)
+    echo "Using staging database"
+    ;;
+  *)
+    echo "Unknown environment: $ENVIRONMENT"
+    exit 1
+    ;;
+esac`,
+          output: `Using prod database`,
+          explanation: `case is bash's switch statement. Each pattern ends with ). Each branch ends with ;;. The * pattern is the default/fallback case. case is cleaner than a long if/elif/elif chain when matching a single variable against multiple values.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Always quote your variables",
+          insight: `Unquoted variables undergo **word splitting** and **glob expansion**. This causes subtle, dangerous bugs:
+
+\`\`\`bash
+FILE="my report.txt"
+rm $FILE    # BAD: runs rm my report.txt (two args!)
+rm "$FILE"  # GOOD: runs rm "my report.txt" (one arg)
+\`\`\`
+
+Rule: always write \`"$var"\` with double quotes unless you specifically want word splitting (rare). This applies everywhere: \`if [[ -f "$file" ]]\`, \`for f in "$@"\`, \`echo "$result"\`.`,
         },
         {
           kind: "warm_up",
@@ -388,7 +553,101 @@ diff <(sort file1.txt) <(sort file2.txt)`,
     },
 
     // ================================================================
-    // 7. Exit codes & error handling
+    // 7. String manipulation & parameter expansion
+    // ================================================================
+    {
+      title: "String manipulation & parameter expansion",
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `Bash has powerful built-in string manipulation through **parameter expansion**. These operations avoid spawning external processes like \`sed\` or \`cut\`, making them faster and more portable. They look cryptic at first but become second nature quickly.
+
+The key operators:
+- **\`\${var#pattern}\`** — remove shortest match from the **start**
+- **\`\${var##pattern}\`** — remove longest match from the **start**
+- **\`\${var%pattern}\`** — remove shortest match from the **end**
+- **\`\${var%%pattern}\`** — remove longest match from the **end**
+- **\`\${var/old/new}\`** — replace first occurrence
+- **\`\${var//old/new}\`** — replace all occurrences
+- **\`\${#var}\`** — string length
+- **\`\${var:offset:length}\`** — substring extraction
+
+Memory trick: \`#\` is on the left side of \`$\` on your keyboard, so it strips from the left (start). \`%\` is on the right side, so it strips from the right (end).`,
+        },
+        {
+          kind: "code_predict",
+          label: "extracting filename and extension",
+          code: `FILE="/home/user/documents/report.final.pdf"
+
+echo "Full path: $FILE"
+echo "Filename:  \${FILE##*/}"
+echo "Directory: \${FILE%/*}"
+echo "Extension: \${FILE##*.}"
+echo "No ext:    \${FILE%.*}"`,
+          output: `Full path: /home/user/documents/report.final.pdf
+Filename:  report.final.pdf
+Directory: /home/user/documents
+Extension: pdf
+No ext:    /home/user/documents/report.final`,
+          explanation: `## strips the longest match of */ from the start, leaving just the filename. % strips the shortest match of /* from the end, leaving the directory. ##*. strips everything up to the last dot, leaving the extension. %.*  strips from the last dot onward. Note the difference between # (shortest) and ## (longest) — with "report.final.pdf", #*. would only strip "report." leaving "final.pdf".`,
+        },
+        {
+          kind: "code_predict",
+          label: "string replacement and length",
+          code: `MSG="Hello World World"
+
+echo "\${MSG/World/Bash}"
+echo "\${MSG//World/Bash}"
+echo "Length: \${#MSG}"
+echo "Substr: \${MSG:6:5}"`,
+          output: `Hello Bash World
+Hello Bash Bash
+Length: 17
+Substr: World`,
+          explanation: `Single / replaces only the first match. Double // replaces all matches. \${#var} gives the string length. \${var:offset:length} extracts a substring starting at offset (0-indexed) for length characters.`,
+        },
+        {
+          kind: "code_predict",
+          label: "case conversion (bash 4+)",
+          code: `NAME="hello world"
+
+echo "\${NAME^}"
+echo "\${NAME^^}"
+
+UPPER="HELLO"
+echo "\${UPPER,,}"`,
+          output: `Hello world
+HELLO WORLD
+hello`,
+          explanation: `^ uppercases the first character, ^^ uppercases all characters. , lowercases the first character, ,, lowercases all. These are bash 4+ features — they will not work on older macOS default bash (3.2) but work everywhere else.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Parameter expansion vs external commands",
+          insight: `Every time you pipe to \`sed\`, \`cut\`, or \`awk\` for simple string operations, you spawn a new process. In a loop processing thousands of items, this adds up fast. Parameter expansion runs inside bash itself — no process spawning, no overhead.
+
+\`\`\`bash
+# Slow (spawns sed for each iteration):
+for f in *.tar.gz; do echo "$f" | sed 's/.tar.gz//'; done
+
+# Fast (pure bash):
+for f in *.tar.gz; do echo "\${f%.tar.gz}"; done
+\`\`\`
+
+Use parameter expansion for simple string operations inside loops. Save \`sed\`/\`awk\` for complex transformations or when processing file contents.`,
+        },
+        {
+          kind: "warm_up",
+          title: "rename file extensions",
+          prompt: `Write a one-liner loop that renames all \`.txt\` files in the current directory to \`.md\`. Use parameter expansion, not \`sed\`.`,
+          answer: `for f in *.txt; do mv "$f" "\${f%.txt}.md"; done`,
+          explanation: `\${f%.txt} strips the .txt suffix from the end of the filename. We then append .md. This is the idiomatic bash way to batch-rename files by extension.`,
+        },
+      ],
+    },
+
+    // ================================================================
+    // 8. Exit codes & error handling
     // ================================================================
     {
       title: "Exit codes & error handling",
@@ -461,14 +720,107 @@ Without this, bash happily continues after errors, leading to data loss and corr
     },
 
     // ================================================================
-    // 8. jq: JSON on the command line
+    // 9. Signals, traps & cleanup
+    // ================================================================
+    {
+      title: "Signals, traps & cleanup",
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `When your script creates temporary files, holds locks, or starts background processes, you need to **clean up** when the script exits — whether it succeeds, fails, or gets killed with Ctrl+C.
+
+The \`trap\` command registers a function to run when the script receives a signal:
+
+| Signal | Number | Trigger |
+|--------|--------|---------|
+| **EXIT** | — | Script exits for any reason |
+| **INT** | 2 | User presses Ctrl+C |
+| **TERM** | 15 | \`kill PID\` (default signal) |
+| **HUP** | 1 | Terminal closed / SSH disconnected |
+
+The most important pattern: **trap cleanup EXIT**. This runs your cleanup function no matter how the script ends — normal exit, error, or signal. It is the bash equivalent of \`try/finally\`.`,
+        },
+        {
+          kind: "code_predict",
+          label: "trap for temp file cleanup",
+          code: `#!/bin/bash
+set -euo pipefail
+
+TMPFILE=\$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
+
+echo "Working with $TMPFILE"
+echo "some data" > "$TMPFILE"
+cat "$TMPFILE"
+# TMPFILE is automatically deleted when script exits`,
+          output: `Working with /tmp/tmp.xYz12AbC
+some data`,
+          explanation: `mktemp creates a secure temporary file. The trap registers a cleanup command that runs when the script exits — whether normally, due to an error (set -e), or due to Ctrl+C. Without the trap, the temp file would be left behind on errors. This is the single most important pattern for writing production bash scripts.`,
+        },
+        {
+          kind: "code_predict",
+          label: "trap with a cleanup function",
+          code: `#!/bin/bash
+set -euo pipefail
+
+TMPDIR=\$(mktemp -d)
+PID=""
+
+cleanup() {
+  echo "Cleaning up..."
+  [[ -n "$PID" ]] && kill "$PID" 2>/dev/null || true
+  rm -rf "$TMPDIR"
+}
+trap cleanup EXIT
+
+# Start a background process
+sleep 100 &
+PID=$!
+echo "Started background process: $PID"
+
+# Script logic here...
+echo "Done"
+# cleanup runs automatically on exit`,
+          output: `Started background process: 12345
+Done
+Cleaning up...`,
+          explanation: `The cleanup function handles multiple resources: killing a background process and removing a temp directory. trap cleanup EXIT ensures it runs no matter what. The || true after kill prevents the script from failing if the process already exited. $! holds the PID of the last background process.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Always use trap EXIT for cleanup",
+          insight: `Any script that creates temporary files, directories, lock files, or background processes should have a \`trap cleanup EXIT\` near the top. This is non-negotiable for production scripts.
+
+\`\`\`bash
+TMPFILE=\$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
+\`\`\`
+
+Without this, your temp files accumulate on every error, every Ctrl+C, every SSH disconnect. On a customer's server, leftover temp files from a crashed script are embarrassing and potentially dangerous (they can fill up /tmp).`,
+        },
+      ],
+    },
+
+    // ================================================================
+    // 10. jq: JSON on the command line
     // ================================================================
     {
       title: "jq: JSON on the command line",
       blocks: [
         {
           kind: "prose",
-          markdown: `\`jq\` is the command-line JSON processor. As an FDE, you will use it constantly — parsing API responses, extracting fields from config files, transforming data. It is the single most useful tool for working with JSON outside of a programming language.`,
+          markdown: `\`jq\` is the command-line JSON processor. As an FDE, you will use it constantly — parsing API responses, extracting fields from config files, transforming data. It is the single most useful tool for working with JSON outside of a programming language.
+
+jq has its own mini-language with filters, pipes, and functions. The core concept: **everything is a filter**. Input JSON flows through filters left to right, and each filter transforms the data. The \`.\` filter is the identity — it passes data through unchanged (useful for pretty-printing).
+
+Key jq patterns to memorize:
+- \`.field\` — extract a field
+- \`.[]\` — iterate over array elements
+- \`.[] | .field\` — extract a field from each array element
+- \`select(condition)\` — filter elements
+- \`{newKey: .oldKey}\` — reshape objects
+- \`@csv\`, \`@tsv\` — format output as CSV or TSV
+- \`-r\` flag — raw string output (no quotes)`,
         },
         {
           kind: "code_predict",
@@ -505,6 +857,58 @@ Without this, bash happily continues after errors, leading to data loss and corr
           explanation: `The -r flag outputs raw strings without JSON quotes. Without it, you would get "claude-sonnet-4-5" (with quotes). Use -r when you need to feed jq output into other commands.`,
         },
         {
+          kind: "code_predict",
+          label: "jq — constructing new objects",
+          code: `echo '[
+  {"name": "web", "cpu": 45, "memory": 512},
+  {"name": "db", "cpu": 92, "memory": 2048},
+  {"name": "cache", "cpu": 12, "memory": 256}
+]' | jq '[.[] | select(.cpu > 40) | {service: .name, cpu_pct: .cpu}]'`,
+          output: `[
+  {
+    "service": "web",
+    "cpu_pct": 45
+  },
+  {
+    "service": "db",
+    "cpu_pct": 92
+  }
+]`,
+          explanation: `This chains multiple operations: .[] iterates the array, select(.cpu > 40) filters to high-CPU services, {service: .name, cpu_pct: .cpu} reshapes each object with new field names, and wrapping everything in [...] collects the results back into an array. This is a very common pattern for transforming API responses.`,
+        },
+        {
+          kind: "code_predict",
+          label: "jq — map, length, and aggregation",
+          code: `echo '{"users": [
+  {"name": "Alice", "role": "admin"},
+  {"name": "Bob", "role": "user"},
+  {"name": "Carol", "role": "admin"},
+  {"name": "Dave", "role": "user"}
+]}' | jq '{
+  total: (.users | length),
+  admins: [.users[] | select(.role == "admin") | .name]
+}'`,
+          output: `{
+  "total": 4,
+  "admins": [
+    "Alice",
+    "Carol"
+  ]
+}`,
+          explanation: `This builds a summary object. length counts array elements. The admin names are collected by iterating, filtering with select, extracting .name, and wrapping in []. Parentheses around (.users | length) are needed so jq evaluates the pipe before assigning to the key.`,
+        },
+        {
+          kind: "key_insight",
+          label: "jq is a full language",
+          insight: `jq is far more powerful than most people realize. It has variables (\`as $x\`), conditionals (\`if-then-else\`), functions (\`def\`), string interpolation (\`"\\(.field)"\`), and even reduce. But 80% of the time, you only need five patterns:
+
+1. \`.field\` — get a value
+2. \`.[].field\` — get values from each array element
+3. \`select(.x > 0)\` — filter
+4. \`{new: .old}\` — reshape
+5. \`-r\` — raw output for scripting`,
+        },
+        {
           kind: "warm_up",
           title: "extract model IDs from API response",
           prompt: `Given this JSON from an API: \`{"models": [{"id": "claude-3"}, {"id": "claude-4"}]}\`, write a jq expression to print each model ID without quotes.`,
@@ -522,7 +926,20 @@ Without this, bash happily continues after errors, leading to data loss and corr
       blocks: [
         {
           kind: "prose",
-          markdown: `\`curl\` is your go-to for making HTTP requests from the terminal. As an FDE, you will use it to test API endpoints, debug webhook payloads, and verify integrations. Combined with \`jq\`, it is an incredibly powerful debugging tool.`,
+          markdown: `\`curl\` is your go-to for making HTTP requests from the terminal. As an FDE, you will use it to test API endpoints, debug webhook payloads, and verify integrations. Combined with \`jq\`, it is an incredibly powerful debugging tool.
+
+Essential flags to memorize:
+- **\`-s\`** — silent mode (no progress bar)
+- **\`-S\`** — show errors even in silent mode
+- **\`-X METHOD\`** — set HTTP method (POST, PUT, DELETE)
+- **\`-H "Header: value"\`** — add a header
+- **\`-d 'body'\`** — set request body (implies POST)
+- **\`-o file\`** — write output to file instead of stdout
+- **\`-w "format"\`** — write out metadata (status code, timing)
+- **\`-v\`** — verbose mode (shows full request/response headers)
+- **\`-L\`** — follow redirects
+
+The most common combo: \`curl -sS URL | jq .\` — silent request with error reporting, piped to jq for pretty-printing.`,
         },
         {
           kind: "code_predict",
@@ -547,6 +964,31 @@ Without this, bash happily continues after errors, leading to data loss and corr
   "created": 1698958800
 }`,
           explanation: `curl fetches the JSON. jq iterates over the data array and constructs a new object with only the fields we care about. This is the bread and butter of API debugging from the terminal.`,
+        },
+        {
+          kind: "code_predict",
+          label: "curl — measuring response time",
+          code: `curl -s -o /dev/null -w "HTTP %{http_code} in %{time_total}s\\n" https://api.example.com/health`,
+          output: `HTTP 200 in 0.142s`,
+          explanation: `-o /dev/null discards the response body. -w formats metadata: %{http_code} is the status code, %{time_total} is the total request time in seconds. This is the quickest way to check if an endpoint is responding and how fast. Other useful -w variables: %{time_connect}, %{time_starttransfer}, %{size_download}.`,
+        },
+        {
+          kind: "code_predict",
+          label: "curl — verbose mode for debugging",
+          code: `curl -v https://api.example.com/health 2>&1 | head -15`,
+          output: `*   Trying 93.184.216.34:443...
+* Connected to api.example.com (93.184.216.34) port 443
+* SSL connection using TLSv1.3
+> GET /health HTTP/2
+> Host: api.example.com
+> User-Agent: curl/8.1.2
+> Accept: */*
+>
+< HTTP/2 200
+< content-type: application/json
+< x-request-id: abc-123
+<`,
+          explanation: `-v (verbose) shows the full request/response exchange. Lines starting with > are what curl sent. Lines starting with < are what the server returned. Lines starting with * are connection metadata. Note: verbose output goes to stderr, so we redirect with 2>&1 to pipe it to head. This is essential for debugging SSL issues, header problems, and redirect chains.`,
         },
         {
           kind: "warm_up",
@@ -602,6 +1044,36 @@ bash -c 'echo "API_KEY=$API_KEY"'`,
           output: `SECRET=
 API_KEY=shared_with_children`,
           explanation: `Without export, SECRET is only visible in the current shell — child processes cannot see it. API_KEY is exported, so it is inherited by the bash -c child process. This is why you must export variables that your scripts and applications need to read.`,
+        },
+        {
+          kind: "code_predict",
+          label: "sourcing a .env file",
+          code: `# .env file contains:
+# DATABASE_URL=postgresql://localhost/mydb
+# API_KEY=sk-abc123
+# DEBUG=true
+
+set -a
+source .env
+set +a
+
+echo "DB: $DATABASE_URL"
+echo "Debug: $DEBUG"`,
+          output: `DB: postgresql://localhost/mydb
+Debug: true`,
+          explanation: `source (or .) executes a file in the current shell, making its variables available. set -a automatically exports all variables that get set (so child processes inherit them too). set +a turns that behavior off. This is the standard pattern for loading .env files in shell scripts.`,
+        },
+        {
+          kind: "key_insight",
+          label: "The environment is inherited, not shared",
+          insight: `Environment variables flow **downward** from parent to child processes, never upward. When you export a variable and run a command, the command gets a **copy** of the variable. If the child modifies it, the parent's copy is unchanged.
+
+This means:
+- \`export FOO=bar && ./script.sh\` — script sees FOO
+- If script.sh does \`FOO=baz\`, the parent's FOO is still "bar"
+- Each process gets its own copy of the environment
+
+This is why \`source\` exists — it runs commands in the **current** shell instead of a child process, so variable changes stick.`,
         },
         {
           kind: "warm_up",
@@ -835,6 +1307,30 @@ API_KEY=shared_with_children`,
           front: `Your deployment script needs a REGION variable, but it should default to "us-east-1" if not set by the caller.`,
           back: `Use the :- default operator: REGION="\${REGION:-us-east-1}". This uses the existing value if set, otherwise falls back to us-east-1.`,
         },
+        {
+          kind: "flashcard",
+          context: "You need to clean up temporary files even if the script crashes",
+          front: `Your script creates a temp file with mktemp. How do you ensure it gets deleted even if the script exits due to an error or Ctrl+C?`,
+          back: `Use trap: TMPFILE=$(mktemp) && trap 'rm -f "$TMPFILE"' EXIT. The EXIT trap fires no matter how the script ends — normal exit, error, or signal. This is the bash equivalent of try/finally.`,
+        },
+        {
+          kind: "flashcard",
+          context: "You need to extract part of a filename in a bash script",
+          front: `You have a variable FILE="report.2024.tar.gz". How do you extract just the extension "gz" and just the basename without any extension?`,
+          back: `Extension: \${FILE##*.} gives "gz" (longest match from start). No extension: \${FILE%%.*} gives "report" (longest match from end). # strips from left, % strips from right. Double ## or %% means longest match.`,
+        },
+        {
+          kind: "flashcard",
+          context: "You need to debug a slow API response",
+          front: `A customer reports their API calls are slow. You want to measure the exact response time from the terminal without seeing the response body.`,
+          back: `curl -s -o /dev/null -w "HTTP %{http_code} in %{time_total}s" URL — the -w flag outputs timing metadata while -o /dev/null discards the body. You can also break down DNS (%{time_namelookup}), connect (%{time_connect}), and TTFB (%{time_starttransfer}).`,
+        },
+        {
+          kind: "flashcard",
+          context: "You need to process a CSV file in bash",
+          front: `You have a CSV file with lines like "alice,admin,active" and need to loop through it extracting the name and role columns.`,
+          back: `Use a while-read loop with IFS: while IFS=',' read -r name role status; do echo "$name is $role"; done < file.csv. IFS sets the field separator. -r prevents backslash interpretation. The < at the end feeds the file into the loop.`,
+        },
       ],
     },
 
@@ -970,10 +1466,12 @@ echo "Deployment to $TARGET complete!"`,
 - **grep / sed / awk** — searching and transforming text
 - **find & xargs** — batch file operations
 - **Variables, loops, conditionals** — writing scripts
+- **String manipulation** — parameter expansion for filenames, extensions, replacements
 - **Command & process substitution** — capturing output
 - **Exit codes & set -euo pipefail** — error handling
+- **Signals & traps** — cleanup and resource management
 - **jq** — JSON processing
-- **curl** — API interaction
+- **curl** — API interaction and debugging
 - **Environment variables** — configuration management
 
 **What to practice next:**
@@ -983,6 +1481,7 @@ echo "Deployment to $TARGET complete!"`,
 3. **Docker CLI** — \`docker logs\`, \`docker exec\`, \`docker-compose\`. Many customer deployments are containerized.
 4. **Git from the CLI** — \`git log --oneline\`, \`git diff\`, \`git bisect\`. Faster than any GUI.
 5. **Regular expressions** — level up your grep/sed/awk with more advanced patterns.
+6. **Shell scripting idioms** — arrays, associative arrays, \`getopts\` for argument parsing, heredocs for multi-line strings.
 
 The best way to practice: **stop using GUIs**. Force yourself to do everything from the terminal for a week. Check API responses with curl instead of Postman. Search code with grep instead of your IDE. The discomfort fades fast and the speed compounds.`,
         },
