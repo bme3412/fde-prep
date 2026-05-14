@@ -91,6 +91,15 @@ If you write \`defaultdict(list)\`, you're saying: "whenever I access a key that
 Let's see the difference side by side:`,
         },
         {
+          kind: "key_insight",
+          label: "The mechanism (memorize this one sentence)",
+          insight: `When you write \`d[key]\` and the key is missing, defaultdict does three things in order: **(1) call \`default_factory()\` with no arguments**, **(2) store the result at \`d[key]\`**, **(3) return it**.
+
+Two consequences fall out of this single rule — and both matter:
+- **The win:** \`d[letter].append(name)\` always works, because by the time \`.append\` runs, defaultdict has guaranteed \`d[letter]\` is a fresh list.
+- **The cost:** even a read-looking access like \`x = d['TSLA']\` creates and stores \`'TSLA'\`. Looking is writing. We'll see this trap in a couple of sections — keep it in mind.`,
+        },
+        {
           kind: "code_comparison",
           label: "plain dict vs defaultdict",
           left: {
@@ -251,6 +260,54 @@ You already understand how it works. Now you know the word for it:
           explanation:
             "The factory is the function you pass to defaultdict. Here it's list, which gets called as list() to produce [] for each new key.",
         },
+        {
+          kind: "warm_up",
+          title: "interleaved: pick the recipe",
+          prompt: `Match each problem to the right factory (\`list\`, \`int\`, or \`set\`):
+
+a) Counting how often each user logs in
+b) Tracking which countries each user has visited
+c) Bucketing customer emails by domain (gmail.com, etc.)
+d) Recording every price tick for each ticker symbol
+
+Answer as four letters separated by commas, e.g. \`list, int, set, list\`.`,
+          answer: "int, set, list, list",
+          explanation: `(a) count → int. (b) collect unique items → set. (c) group items → list. (d) collect every value (duplicates allowed) → list.
+
+The trick: do you want to **count**, **collect uniques**, or **group all occurrences**? Each maps to exactly one factory.`,
+        },
+        {
+          kind: "code_predict",
+          label: "BUG HUNT — find what's wrong (then fix it and run)",
+          code: `from collections import defaultdict
+
+# This code is supposed to count word occurrences,
+# but the author still wrote it like a plain dict.
+# What's redundant? Delete the unnecessary lines, then run.
+
+words = ["buy", "sell", "buy", "hold", "buy", "sell"]
+
+counts = defaultdict(int)
+for word in words:
+    if word not in counts:
+        counts[word] = 0
+    counts[word] += 1
+
+print(dict(counts))`,
+          output: `{'buy': 3, 'sell': 2, 'hold': 1}`,
+          explanation: `The \`if word not in counts: counts[word] = 0\` is the bookkeeping defaultdict already does for you. The whole point of \`defaultdict(int)\` is that \`counts[word]\` is guaranteed to start at 0. Those two lines defeat the purpose.
+
+The clean version is just:
+
+\`\`\`python
+counts = defaultdict(int)
+for word in words:
+    counts[word] += 1
+\`\`\`
+
+Articulating *why* the if-block is wrong is what locks in the lesson — defaultdict's job is to eliminate exactly that bookkeeping.`,
+          runnable: true,
+        },
       ],
     },
 
@@ -261,9 +318,41 @@ You already understand how it works. Now you know the word for it:
       title: "The trap: looking up a key creates it",
       blocks: [
         {
-          kind: "key_insight",
-          label: "Watch out for this",
-          insight: `Every time you write \`d[key]\` on a defaultdict, it creates that key if it wasn't there before. This is what makes grouping and counting work — but it also means that just *looking* at a key (even to check its value) will silently add it to your dict.`,
+          kind: "prose",
+          markdown: `Remember the one-sentence mechanism from section 2? *"Call the factory, store the result, return it."* The trap is the second word: **store**. Let's see if you can predict the consequence before reading on.`,
+        },
+        {
+          kind: "warm_up",
+          title: "predict the trap",
+          prompt: `Suppose I run:
+
+\`\`\`python
+d = defaultdict(int)
+x = d['TSLA']     # just reading, right?
+\`\`\`
+
+What is \`len(d)\` afterwards? (Answer as a number.)`,
+          answer: "1",
+          explanation: `Most people guess 0 here — "I'm just reading, why would the dict grow?" But the mechanism says: on a missing key, defaultdict **stores** the factory's result before returning. So \`d['TSLA']\` created the entry \`'TSLA': 0\` as a side effect, and \`len(d)\` is now 1. Looking is writing.`,
+        },
+        {
+          kind: "code_predict",
+          label: "see the mechanism explicitly (you can call __missing__ yourself)",
+          code: `from collections import defaultdict
+
+d = defaultdict(int)
+print(len(d))            # before: empty
+
+# This is what d['x'] does under the hood — you can call it directly:
+d.__missing__('x')
+
+print(len(d))            # after: __missing__ stored 'x'
+print(dict(d))`,
+          output: `0\n1\n{'x': 0}`,
+          explanation: `defaultdict's secret is the \`__missing__\` dunder method. When you write \`d[k]\` and \`k\` is missing, Python's dict machinery calls \`d.__missing__(k)\`, which calls \`default_factory()\`, **stores** the result at \`d[k]\`, and returns it.
+
+You normally never call \`__missing__\` directly — but seeing it makes the trap concrete. The store is the whole point.`,
+          runnable: true,
         },
         {
           kind: "code_predict",
@@ -749,21 +838,100 @@ print(search(idx, "beats"))          # {0, 4}`,
     },
 
     // ================================================================
-    // 12. What to practice next
+    // 12. Lock it in: cold recall from memory
     // ================================================================
     {
-      title: "What to practice next",
+      title: "Lock it in: cold recall from memory",
       blocks: [
         {
           kind: "prose",
-          markdown: `You now know:
+          markdown: `This is the most important section in the guide. Recognition (seeing the right answer and going "yep, that's it") is **not** learning. **Retrieval** — reconstructing the answer from memory before you check — is what builds durable knowledge.
 
-- The three defaultdict recipes: \`list\` (group), \`int\` (count), \`set\` (collect uniques)
-- The trap: \`d[key]\` creates keys — use \`.get()\` for safe lookups
-- Custom defaults with \`lambda\`
-- When to use \`defaultdict\` vs. \`dict.get()\` vs. \`Counter\`
+Scroll back **only after** you've tried each prompt. Treat being wrong as a feature; the act of being wrong and then correcting yourself is what locks it in.`,
+        },
+        {
+          kind: "warm_up",
+          title: "the recall grid — fill it from memory",
+          prompt: `Without scrolling up, complete this grid. Answer in this format, one row per line:
 
-To lock this in, try using defaultdict the next time you write a grouping or counting loop in your own code. If you want more practice, try reimplementing the challenges in this guide without looking at the solutions.`,
+\`\`\`
+pattern | factory | operation | one example
+\`\`\`
+
+Three rows: **group**, **count**, **collect unique**.`,
+          answer: `group | list | .append() | bucket trades by ticker
+count | int | += 1 | tally word frequencies
+collect unique | set | .add() | track distinct cities per user`,
+          explanation: `If you got all three rows without peeking, you own the core idea. If you missed one, *that's* the one you'll forget tomorrow — write it on a sticky note and revisit it in 24 hours. The pattern-factory-operation triple is the entire mental model of defaultdict.`,
+        },
+        {
+          kind: "warm_up",
+          title: "the mechanism in one sentence",
+          prompt: `In your own words: when you write \`d[key]\` on a defaultdict and the key is missing, what three things happen, in order?`,
+          answer:
+            "Call default_factory(); store the result at d[key]; return it.",
+          explanation: `This sentence is the single most useful thing to memorize. It explains both why grouping works (the **store** guarantees an empty container for .append) AND why looking creates keys (the **store** happens even on a read-shaped access).`,
+        },
+        {
+          kind: "warm_up",
+          title: "trap recall",
+          prompt: `You have a populated \`defaultdict(int)\` called \`counts\`. You want to safely check whether \`"TSLA"\` is in there WITHOUT adding it. Write two different one-liners that work.`,
+          answer: '"TSLA" in counts   OR   counts.get("TSLA", 0)',
+          explanation: `Both \`in\` and \`.get()\` bypass \`__missing__\` — they don't call the factory. Only the subscript form \`counts[key]\` triggers auto-creation.`,
+        },
+        {
+          kind: "code_predict",
+          label: "BUG HUNT — fix it, then run",
+          code: `from collections import defaultdict
+
+# Goal: count how many distinct cities each person has visited.
+# This code has TWO bugs. Find them, fix them, run.
+
+visits = [
+    ("Alice", "Paris"),
+    ("Alice", "Paris"),
+    ("Alice", "London"),
+    ("Bob", "Paris"),
+]
+
+cities = defaultdict(list)            # bug #1: wrong factory
+for person, city in visits:
+    cities[person].append(city)
+
+# bug #2: this prints the wrong thing for "distinct cities"
+for person in cities:
+    print(person, len(cities[person]))`,
+          output: `Alice 2\nBob 1`,
+          explanation: `Two related bugs:
+
+1. **Wrong factory.** \`defaultdict(list)\` keeps every visit, including duplicates — Alice visits Paris twice and we'd count it twice. Use \`defaultdict(set)\` and \`.add()\` instead.
+2. **Wrong count.** With a list, \`len()\` gives the number of *visits*, not distinct cities. With a set, \`len()\` correctly gives distinct cities.
+
+The fix:
+
+\`\`\`python
+cities = defaultdict(set)
+for person, city in visits:
+    cities[person].add(city)
+for person in cities:
+    print(person, len(cities[person]))
+\`\`\`
+
+This is the "pick the right recipe" skill in a real bug. Notice how the wrong choice still *runs* — it just silently produces the wrong answer. That's why being deliberate about factory choice matters.`,
+          runnable: true,
+        },
+        {
+          kind: "key_insight",
+          label: "Spaced practice plan",
+          insight: `**Day 1 (today):** Finish this guide. Don't look at solutions until you've tried.
+
+**Day 2 (tomorrow):** Without opening the guide, re-do the recall grid above on paper. Then reimplement *one* of the three challenges from memory.
+
+**Day 4:** Reimplement *all three* challenges from memory. Time yourself — you should beat your day-2 time.
+
+**Day 7:** Pick a piece of code you've written in the past month that uses a plain dict for grouping or counting. Refactor it to use defaultdict. If the refactor doesn't feel automatic by then, you've found exactly the section to revisit.
+
+This is the difference between "I read about defaultdict once" and "defaultdict is the first thing my fingers reach for."`,
         },
       ],
     },

@@ -9,6 +9,9 @@ export interface CodePredict {
   output: string;
   /** Brief explanation of why */
   explanation: string;
+  /** When true, render a "Run code" button that executes the snippet in a
+   * browser-side Pyodide runtime. Defaults to false (display only). */
+  runnable?: boolean;
 }
 
 /** A "what happens in this system?" block — for API payloads, JSON, non-Python scenarios */

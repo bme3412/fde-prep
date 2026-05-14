@@ -19,7 +19,6 @@ export const metadata: Metadata = {
 };
 
 const NAV_LINKS = [
-  { href: "/", label: "Dashboard" },
   { href: "/topics", label: "Topics" },
   { href: "/practice", label: "Practice" },
   { href: "/log", label: "Log" },
@@ -35,7 +34,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 font-sans">
         <header className="border-b border-zinc-200 bg-white">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <Link href="/" className="font-semibold text-lg tracking-tight">
+            <Link href="/topics" className="font-semibold text-lg tracking-tight">
               FDE Prep
             </Link>
             <nav className="flex gap-4 text-sm">
