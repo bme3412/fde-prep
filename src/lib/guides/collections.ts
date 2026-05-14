@@ -155,6 +155,45 @@ Same result as before — but we never wrote a single if-check.`,
           explanation:
             "The first time d['x'] was accessed, defaultdict created an empty list []. Then we appended 1, making it [1]. Then we appended 2, making it [1, 2].",
         },
+        {
+          kind: "multiple_choice",
+          title: "what gets printed?",
+          prompt:
+            "Predict the two values this prints. Apply the three-step mechanism in your head before picking.",
+          code: `from collections import defaultdict
+
+d = defaultdict(list)
+print(d['a'])
+print(len(d))`,
+          choices: [
+            {
+              text: "None\n0",
+              correct: false,
+              rationale:
+                "defaultdict never returns None for a missing key — it calls the factory.",
+            },
+            {
+              text: "[]\n0",
+              correct: false,
+              rationale:
+                "Close — d['a'] does return [], but accessing it also STORED 'a' as a key, so len(d) is 1.",
+            },
+            {
+              text: "[]\n1",
+              correct: true,
+              rationale:
+                "Exactly right. d['a'] called list() → [], stored it at d['a'], returned it. The store is why len(d) == 1.",
+            },
+            {
+              text: "Raises KeyError",
+              correct: false,
+              rationale:
+                "Plain dict would raise KeyError. defaultdict's whole purpose is to avoid this — it calls the factory instead.",
+            },
+          ],
+          explanation:
+            "This question is a direct application of the three-step rule. Whenever you see `d[missing_key]` on a defaultdict, mentally run: (1) call factory (2) STORE (3) return. The store is the part most people forget — and it's why len(d) goes up.",
+        },
       ],
     },
 
@@ -277,6 +316,40 @@ Answer as four letters separated by commas, e.g. \`list, int, set, list\`.`,
 The trick: do you want to **count**, **collect uniques**, or **group all occurrences**? Each maps to exactly one factory.`,
         },
         {
+          kind: "multiple_choice",
+          title: "pick the right factory",
+          prompt:
+            "You're writing a function that, given a list of trades, returns the **unique set of exchanges** each ticker has traded on. Which factory do you want?",
+          choices: [
+            {
+              text: "defaultdict(list)",
+              correct: false,
+              rationale:
+                "A list would store every (ticker, exchange) pair including duplicates — but the question asks for the UNIQUE set.",
+            },
+            {
+              text: "defaultdict(int)",
+              correct: false,
+              rationale:
+                "int is for counting. We want to collect the exchange names themselves, not count them.",
+            },
+            {
+              text: "defaultdict(set)",
+              correct: true,
+              rationale:
+                "set is the unique-collector. `exchanges[ticker].add(exchange)` deduplicates automatically.",
+            },
+            {
+              text: "defaultdict(dict)",
+              correct: false,
+              rationale:
+                "A dict has keys and values — we just need a collection of unique items, so set is simpler and correct.",
+            },
+          ],
+          explanation:
+            "Map the requirement to the recipe: 'unique' → set, 'count' → int, 'group all' → list. This is the single most common decision you'll make when reaching for defaultdict.",
+        },
+        {
           kind: "code_predict",
           label: "BUG HUNT — find what's wrong (then fix it and run)",
           code: `from collections import defaultdict
@@ -394,6 +467,46 @@ Rule of thumb: use \`d[key]\` when you're writing to the dict (appending, counti
           explanation:
             ".get() never triggers the factory — it just returns the fallback value (0 here) if the key is missing. d[key] always triggers it.",
         },
+        {
+          kind: "multiple_choice",
+          title: "which lines grow the dict?",
+          prompt:
+            "Start with `d = defaultdict(int)` (empty). Which of the four lines below would ADD a key to `d`? Pick the option listing ONLY the lines that mutate.",
+          code: `d = defaultdict(int)
+
+# Line 1:  d['a'] += 1
+# Line 2:  'b' in d
+# Line 3:  d.get('c', 0)
+# Line 4:  x = d['d']`,
+          choices: [
+            {
+              text: "Lines 1 and 4 only",
+              correct: true,
+              rationale:
+                "Only subscript access on a missing key triggers __missing__. Line 1 mutates via += (which is a write). Line 4 looks like a read but is also a subscript — it stores 'd': 0 as a side effect.",
+            },
+            {
+              text: "Lines 1, 2, and 4",
+              correct: false,
+              rationale:
+                "The `in` operator does NOT call __missing__ — it goes through dict's __contains__, which just checks membership and returns False.",
+            },
+            {
+              text: "All four lines",
+              correct: false,
+              rationale:
+                ".get() and `in` are both factory-safe. They're the two main escape hatches from the trap.",
+            },
+            {
+              text: "Only line 1",
+              correct: false,
+              rationale:
+                "Line 4 is the subtle one — `x = d['d']` looks like a read, but defaultdict ALWAYS stores on missing subscript access. That's the trap.",
+            },
+          ],
+          explanation:
+            "The two factory-safe operations are `.get(key, default)` and `key in d`. Everything that uses `d[key]` — even on the right side of an assignment — triggers __missing__ and stores. This is the whole content of section 4 in one question.",
+        },
       ],
     },
 
@@ -466,6 +579,44 @@ for sector, tickers in by_sector.items():
           kind: "key_insight",
           label: "When to stop nesting",
           insight: `Nesting works well for 2 levels. Beyond that, the code gets hard to read. If you need 3+ levels of grouping, switch to a \`@dataclass\` or a dictionary of dataclasses instead.`,
+        },
+        {
+          kind: "multiple_choice",
+          title: "fill in the blank: nested factory",
+          prompt:
+            "You want a two-level structure: sector → ticker → list of prices, all auto-creating. Which goes in the blank?",
+          code: `from collections import defaultdict
+
+by_sector = defaultdict(______)
+by_sector['tech']['AAPL'].append(150.0)`,
+          choices: [
+            {
+              text: "list",
+              correct: false,
+              rationale:
+                "defaultdict(list) means missing keys map to [], so `by_sector['tech']` would be a list, not another dict. Then ['AAPL'] would fail.",
+            },
+            {
+              text: "defaultdict(list)",
+              correct: false,
+              rationale:
+                "Subtle — but the factory must be CALLABLE WITH NO ARGS. `defaultdict(list)` is an instance, not a callable that returns a fresh one. You'd reuse the SAME inner dict for every sector.",
+            },
+            {
+              text: "lambda: defaultdict(list)",
+              correct: true,
+              rationale:
+                "A lambda that returns a NEW defaultdict(list) each time it's called. Each sector gets its own inner dict. This is the canonical 2-level nesting pattern.",
+            },
+            {
+              text: "dict(list)",
+              correct: false,
+              rationale:
+                "`dict(list)` is just an empty dict — it has no auto-create behavior. The outer key would map to a static empty dict and ['AAPL'].append would raise.",
+            },
+          ],
+          explanation:
+            "The factory must be a callable that produces a FRESH inner dict on each call. `lambda: defaultdict(list)` is a 0-arg callable that does exactly that. The subtle wrong answer (defaultdict(list)) is the most common bug — passing the instance instead of a factory that produces fresh instances.",
         },
       ],
     },
@@ -577,6 +728,76 @@ For each scenario below, decide which tool you'd reach for:`,
           front:
             "You need to group stocks by sector, then by ticker, then collect prices into lists.",
           back: "defaultdict(lambda: defaultdict(list)) — nested factories. Beyond 2 levels, consider a dataclass.",
+        },
+        {
+          kind: "multiple_choice",
+          title: "Counter vs defaultdict(int)",
+          prompt:
+            "When should you reach for `Counter` instead of `defaultdict(int)`?",
+          choices: [
+            {
+              text: "When counting needs to be faster than defaultdict",
+              correct: false,
+              rationale:
+                "They're essentially identical in speed for counting. Speed is not the reason to choose Counter.",
+            },
+            {
+              text: "When you need methods like `.most_common(n)` or arithmetic between counters",
+              correct: true,
+              rationale:
+                "Counter is a defaultdict(int) PLUS extras: .most_common, .elements, and arithmetic (c1 + c2 sums counts; c1 - c2 subtracts). If you need any of those, use Counter.",
+            },
+            {
+              text: "When you don't want missing keys to auto-create",
+              correct: false,
+              rationale:
+                "Counter behaves like defaultdict(int) here — missing keys return 0, but unlike defaultdict, Counter does NOT store them on access (this is a small Counter-specific quirk). The main reason to choose Counter is the extra methods.",
+            },
+            {
+              text: "When keys must be hashable",
+              correct: false,
+              rationale:
+                "Both Counter and defaultdict require hashable keys. That's a dict invariant, not a Counter-specific feature.",
+            },
+          ],
+          explanation:
+            "Default rule: `defaultdict(int)` for ad-hoc counting inside a larger pipeline; `Counter(iterable)` when counting IS the task and you want `.most_common(n)` or counter arithmetic.",
+        },
+        {
+          kind: "multiple_choice",
+          title: "the read-only requirement",
+          prompt:
+            "Your code receives a dict of stock ratings from another module. You want to look up `'GOOG'` and fall back to `'unrated'` if missing — but you must NOT mutate the dict. Which is correct?",
+          code: `# ratings is a regular dict you received from elsewhere
+# You don't own it — don't mutate it`,
+          choices: [
+            {
+              text: "ratings['GOOG']",
+              correct: false,
+              rationale:
+                "On a regular dict this raises KeyError when the key is missing. Even if it didn't, this isn't a fallback.",
+            },
+            {
+              text: "ratings.get('GOOG', 'unrated')",
+              correct: true,
+              rationale:
+                "`.get` returns the fallback value WITHOUT mutating the dict. This works on both regular dicts and defaultdicts — and is the safe read-only choice.",
+            },
+            {
+              text: "ratings.setdefault('GOOG', 'unrated')",
+              correct: false,
+              rationale:
+                "setdefault DOES mutate — it stores 'unrated' at 'GOOG' if missing. This is exactly what you're told NOT to do.",
+            },
+            {
+              text: "defaultdict(lambda: 'unrated')(ratings)",
+              correct: false,
+              rationale:
+                "Not valid syntax for what you want, and even if it were, defaultdict mutates on access — the same problem.",
+            },
+          ],
+          explanation:
+            "Read-only lookups: `.get(key, fallback)`. Lookups that should also create-if-missing: `setdefault` (regular dict) or `d[key]` (defaultdict). The verb 'set' in setdefault is the giveaway that it mutates.",
         },
       ],
     },
@@ -878,6 +1099,81 @@ collect unique | set | .add() | track distinct cities per user`,
           prompt: `You have a populated \`defaultdict(int)\` called \`counts\`. You want to safely check whether \`"TSLA"\` is in there WITHOUT adding it. Write two different one-liners that work.`,
           answer: '"TSLA" in counts   OR   counts.get("TSLA", 0)',
           explanation: `Both \`in\` and \`.get()\` bypass \`__missing__\` — they don't call the factory. Only the subscript form \`counts[key]\` triggers auto-creation.`,
+        },
+        {
+          kind: "multiple_choice",
+          title: "cold recall: what is len(d)?",
+          prompt:
+            "Without looking at earlier sections, predict `len(d)` after this runs.",
+          code: `from collections import defaultdict
+
+d = defaultdict(list)
+d['a'].append(1)
+x = d['b']
+y = d.get('c', [])
+'d' in d`,
+          choices: [
+            {
+              text: "1",
+              correct: false,
+              rationale:
+                "Only 'a' would create — but you're missing one. `d['b']` is a subscript on a missing key, which also stores.",
+            },
+            {
+              text: "2",
+              correct: true,
+              rationale:
+                "'a' (from append, which is a subscript+method) and 'b' (from `x = d['b']`, also a subscript) both store. .get() and `in` do NOT store. So len(d) == 2.",
+            },
+            {
+              text: "3",
+              correct: false,
+              rationale:
+                ".get('c', []) returns [] but does NOT store 'c'. It's the read-safe path.",
+            },
+            {
+              text: "4",
+              correct: false,
+              rationale:
+                "`'d' in d` returns False but never triggers the factory. It's the other read-safe path.",
+            },
+          ],
+          explanation:
+            "Two operations store: `d['a'].append(...)` and `x = d['b']`. Two don't: `.get(...)` and `in`. Recognizing which ops mutate vs read is the entire takeaway of the trap section.",
+        },
+        {
+          kind: "multiple_choice",
+          title: "cold recall: choose the recipe",
+          prompt:
+            "You receive a stream of `(user_id, page_url)` events. You want a structure where you can ask: 'how many DISTINCT pages did user U visit?' The answer must not double-count repeat visits. Which initial structure?",
+          choices: [
+            {
+              text: "defaultdict(int) — increment on every event",
+              correct: false,
+              rationale:
+                "This counts TOTAL visits, including duplicates. We want distinct.",
+            },
+            {
+              text: "defaultdict(list) — append every page",
+              correct: false,
+              rationale:
+                "Stores duplicates. You'd then have to `len(set(pages))` at query time — wasteful and a separate bug source.",
+            },
+            {
+              text: "defaultdict(set) — add every page",
+              correct: true,
+              rationale:
+                "Set dedups on insert. `len(pages[user])` gives distinct count directly.",
+            },
+            {
+              text: "Counter() — count every (user, page) pair",
+              correct: false,
+              rationale:
+                "Would work but you'd then have to filter and count distinct keys per user — much more complex than `defaultdict(set)`.",
+            },
+          ],
+          explanation:
+            "Key word: DISTINCT. That's the set signal. Whenever you hear 'unique', 'distinct', or 'deduplicated' as a requirement, `defaultdict(set)` is almost always the right answer.",
         },
         {
           kind: "code_predict",

@@ -12,6 +12,7 @@ import {
   MethodRefBlock,
   CodeComparisonBlock,
   WarmUpBlock,
+  MultipleChoiceBlock,
   GuideProgress,
 } from "./components";
 import type { Flashcard as FlashcardData } from "@/lib/guide-types";
@@ -43,6 +44,7 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
   let totalChallenges = 0;
   let totalFlashcardDecks = 0;
   let totalWarmUps = 0;
+  let totalMCQs = 0;
 
   for (const section of guide.sections) {
     const flashcardsInSection: FlashcardData[] = [];
@@ -51,6 +53,7 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
       if (block.kind === "scenario_predict") totalScenarios++;
       if (block.kind === "mini_challenge") totalChallenges++;
       if (block.kind === "warm_up") totalWarmUps++;
+      if (block.kind === "multiple_choice") totalMCQs++;
       if (block.kind === "flashcard") flashcardsInSection.push(block);
     }
     if (flashcardsInSection.length > 0) totalFlashcardDecks++;
@@ -83,6 +86,7 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
           totalChallenges={totalChallenges}
           totalFlashcardDecks={totalFlashcardDecks}
           totalWarmUps={totalWarmUps}
+          totalMCQs={totalMCQs}
         />
       </div>
 
@@ -146,6 +150,8 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
                       return <CodeComparisonBlock key={bi} data={block} />;
                     case "warm_up":
                       return <WarmUpBlock key={bi} data={block} />;
+                    case "multiple_choice":
+                      return <MultipleChoiceBlock key={bi} data={block} />;
                     case "flashcard":
                       if (
                         flashcards.length > 0 &&

@@ -98,6 +98,28 @@ export interface KeyInsight {
   insight: string;
 }
 
+/** A multiple-choice question (optionally about a code snippet) */
+export interface MultipleChoice {
+  kind: "multiple_choice";
+  /** Short title for the card meta line */
+  title: string;
+  /** The question text (markdown supported) */
+  prompt: string;
+  /** Optional code block displayed above the choices */
+  code?: string;
+  /** 2–5 choices; exactly one should be marked correct */
+  choices: {
+    /** The choice text (can be code-like) */
+    text: string;
+    /** True for the correct answer */
+    correct: boolean;
+    /** Optional per-choice rationale — shown after the user picks */
+    rationale?: string;
+  }[];
+  /** Explanation shown after answering */
+  explanation: string;
+}
+
 /** A compact API reference card showing method signatures for a data structure */
 export interface MethodRef {
   kind: "method_ref";
@@ -125,7 +147,8 @@ export type GuideBlock =
   | KeyInsight
   | MethodRef
   | CodeComparison
-  | WarmUp;
+  | WarmUp
+  | MultipleChoice;
 
 export interface StudyGuide {
   topicTitle: string;

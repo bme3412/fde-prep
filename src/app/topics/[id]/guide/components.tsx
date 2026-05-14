@@ -12,6 +12,7 @@ import type {
   MethodRef as MethodRefData,
   CodeComparison as CodeComparisonData,
   WarmUp as WarmUpData,
+  MultipleChoice as MultipleChoiceData,
 } from "@/lib/guide-types";
 import { runPython, type RunResult } from "@/lib/pyodide-runtime";
 
@@ -625,6 +626,107 @@ export function WarmUpBlock({ data }: { data: WarmUpData }) {
   );
 }
 
+// ── MultipleChoice ─────────────────────────────────────────────────────────
+
+export function MultipleChoiceBlock({ data }: { data: MultipleChoiceData }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  const correctIdx = data.choices.findIndex((c) => c.correct);
+  const isAnswered = picked !== null;
+  const isCorrect = picked === correctIdx;
+
+  return (
+    <div className={CARD}>
+      <CardHeader dot="bg-indigo-500" label="Multiple Choice" meta={data.title} />
+      <div className="p-4 sm:p-5 space-y-4">
+        {/* Prompt */}
+        <div className="guide-prose text-sm text-zinc-800 leading-relaxed">
+          <Markdown remarkPlugins={[remarkGfm]}>{data.prompt}</Markdown>
+        </div>
+
+        {/* Optional code block */}
+        {data.code && (
+          <pre className={`${CODE_CLASSES} rounded-lg`}>{data.code}</pre>
+        )}
+
+        {/* Choices */}
+        <div className="space-y-2">
+          {data.choices.map((choice, i) => {
+            const isPicked = picked === i;
+            const isCorrectChoice = i === correctIdx;
+
+            // Color states
+            let stateClass = "border-zinc-200 bg-white hover:bg-zinc-50";
+            if (isAnswered) {
+              if (isCorrectChoice) {
+                stateClass = "border-emerald-400 bg-emerald-50";
+              } else if (isPicked) {
+                stateClass = "border-red-400 bg-red-50";
+              } else {
+                stateClass = "border-zinc-200 bg-white opacity-60";
+              }
+            }
+
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={isAnswered}
+                onClick={() => setPicked(i)}
+                className={`w-full text-left border rounded-lg px-4 py-3 transition-colors ${stateClass} disabled:cursor-default`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-xs font-mono font-semibold text-zinc-400 mt-0.5 shrink-0">
+                    {String.fromCharCode(65 + i)}.
+                  </span>
+                  <div className="flex-1 text-sm text-zinc-800 font-mono whitespace-pre-wrap break-words">
+                    {choice.text}
+                  </div>
+                  {isAnswered && isCorrectChoice && (
+                    <span className="text-emerald-600 text-sm font-semibold shrink-0">
+                      &#10003;
+                    </span>
+                  )}
+                  {isAnswered && isPicked && !isCorrectChoice && (
+                    <span className="text-red-600 text-sm font-semibold shrink-0">
+                      &#10007;
+                    </span>
+                  )}
+                </div>
+                {isAnswered && (isPicked || isCorrectChoice) && choice.rationale && (
+                  <div className="mt-2 ml-7 text-xs text-zinc-600 leading-relaxed">
+                    {choice.rationale}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Result + explanation */}
+        {isAnswered && (
+          <div className="space-y-2 pt-1">
+            <div
+              className={`text-sm font-semibold ${isCorrect ? "text-emerald-700" : "text-red-700"}`}
+            >
+              {isCorrect ? "Correct" : "Not quite"}
+            </div>
+            <div className="text-sm text-zinc-700 bg-zinc-50 border border-zinc-100 rounded-lg p-4 leading-relaxed">
+              {data.explanation}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPicked(null)}
+              className="text-xs text-zinc-400 hover:text-zinc-600 underline"
+            >
+              Reset
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Progress tracker ───────────────────────────────────────────────────────
 
 export function GuideProgress({
@@ -633,17 +735,20 @@ export function GuideProgress({
   totalChallenges,
   totalFlashcardDecks,
   totalWarmUps,
+  totalMCQs = 0,
 }: {
   totalPredicts: number;
   totalScenarios: number;
   totalChallenges: number;
   totalFlashcardDecks: number;
   totalWarmUps: number;
+  totalMCQs?: number;
 }) {
-  const total = totalPredicts + totalScenarios + totalChallenges + totalFlashcardDecks + totalWarmUps;
+  const total = totalPredicts + totalScenarios + totalChallenges + totalFlashcardDecks + totalWarmUps + totalMCQs;
   const items = [
     totalPredicts > 0 && `${totalPredicts} prediction${totalPredicts !== 1 ? "s" : ""}`,
     totalWarmUps > 0 && `${totalWarmUps} try-it${totalWarmUps !== 1 ? "s" : ""}`,
+    totalMCQs > 0 && `${totalMCQs} multiple-choice`,
     totalScenarios > 0 && `${totalScenarios} scenario${totalScenarios !== 1 ? "s" : ""}`,
     totalFlashcardDecks > 0 && `${totalFlashcardDecks} flashcard deck${totalFlashcardDecks !== 1 ? "s" : ""}`,
     totalChallenges > 0 && `${totalChallenges} challenge${totalChallenges !== 1 ? "s" : ""}`,
