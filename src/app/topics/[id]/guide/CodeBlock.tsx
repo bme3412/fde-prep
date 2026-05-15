@@ -7,7 +7,7 @@ import { Highlight, type PrismTheme } from "prism-react-renderer";
  * guide UI. Token colors picked for high contrast on dark slate while staying
  * close to the VS Code Dark+ palette people recognize.
  */
-const slateTheme: PrismTheme = {
+export const slateTheme: PrismTheme = {
   plain: {
     color: "#e2e8f0", // slate-200 — base text
     backgroundColor: "#1e293b", // slate-800
@@ -85,7 +85,7 @@ const slateTheme: PrismTheme = {
  * Map our friendly language hints to Prism language identifiers.
  * Anything unknown falls back to plain text (no highlighting, just colors plain).
  */
-function normalizeLang(lang: string | undefined): string {
+export function normalizeLang(lang: string | undefined): string {
   if (!lang) return "text";
   const l = lang.toLowerCase();
   if (l === "py" || l === "python") return "python";

@@ -16,6 +16,7 @@ import type {
 } from "@/lib/guide-types";
 import { runPython, type RunResult } from "@/lib/pyodide-runtime";
 import { CodeBlock } from "./CodeBlock";
+import { CodeEditor } from "./CodeEditor";
 
 /*
  * Design system:
@@ -27,7 +28,6 @@ import { CodeBlock } from "./CodeBlock";
  */
 
 const CODE_BG = "bg-[#1e293b]";
-const CODE_TEXT = "text-[#e2e8f0]";
 const CARD = "rounded-xl border border-zinc-200 bg-white overflow-hidden";
 const BTN_PRIMARY = "bg-zinc-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-zinc-700 transition-colors active:scale-[0.98]";
 const BTN_PRIMARY_FULL = `w-full sm:w-auto ${BTN_PRIMARY}`;
@@ -86,16 +86,67 @@ function CardHeader({ dot, label, meta }: { dot: string; label: string; meta?: s
 
 type RunStatus = "idle" | "loading" | "running" | "done";
 
+function RunOutput({ result }: { result: RunResult }) {
+  if (result.error) {
+    return (
+      <pre className="bg-red-50 text-red-800 border border-red-200 px-3 py-2 rounded text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+        {result.error}
+        {result.stderr && "\n" + result.stderr}
+      </pre>
+    );
+  }
+  return (
+    <CodeBlock
+      code={result.stdout || "(no output)"}
+      language="text"
+      className="rounded"
+    />
+  );
+}
+
+function RunButton({
+  status,
+  onClick,
+  idleLabel,
+  doneLabel,
+}: {
+  status: RunStatus;
+  onClick: () => void;
+  idleLabel: string;
+  doneLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={status === "loading" || status === "running"}
+      className={`${BTN_PRIMARY} disabled:opacity-60 disabled:cursor-wait`}
+    >
+      {status === "loading" && "Loading Python runtime…"}
+      {status === "running" && "Running…"}
+      {status === "idle" && idleLabel}
+      {status === "done" && doneLabel}
+    </button>
+  );
+}
+
 export function CodePredict({ data }: { data: CodePredictData }) {
+  // Primary editor — prefilled with the prediction prompt code.
   const [code, setCode] = useState(data.code);
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  const isEdited = code !== data.code;
-  const lineCount = Math.max(4, code.split("\n").length);
+  // Scratch editor — empty, for the user's own experiments.
+  const [scratchCode, setScratchCode] = useState("");
+  const [scratchStatus, setScratchStatus] = useState<RunStatus>("idle");
+  const [scratchResult, setScratchResult] = useState<RunResult | null>(null);
 
-  async function handleRun() {
+  const isEdited = code !== data.code;
+  const primaryLines = Math.max(4, code.split("\n").length);
+  const scratchLines = Math.max(6, scratchCode.split("\n").length);
+
+  async function runPrimary() {
     setRunStatus(
       typeof window !== "undefined" && window.loadPyodide ? "running" : "loading",
     );
@@ -113,19 +164,45 @@ export function CodePredict({ data }: { data: CodePredictData }) {
     }
   }
 
+  async function runScratch() {
+    if (!scratchCode.trim()) return;
+    setScratchStatus(
+      typeof window !== "undefined" && window.loadPyodide ? "running" : "loading",
+    );
+    try {
+      const result = await runPython(scratchCode);
+      setScratchResult(result);
+    } catch (e) {
+      setScratchResult({
+        stdout: "",
+        stderr: "",
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setScratchStatus("done");
+    }
+  }
+
+  // Ctrl/Cmd+Enter in the scratch pad triggers Run.
+  function onScratchKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      runScratch();
+    }
+  }
+
   return (
     <div className={CARD}>
       <CardHeader dot="bg-zinc-800" label="Code Playground" meta={data.label} />
 
-      {/* Editable code block */}
-      <div className={`${CODE_BG} relative`}>
-        <textarea
+      {/* Primary editable code block — syntax highlighted */}
+      <div className="relative">
+        <CodeEditor
           value={code}
-          onChange={(e) => setCode(e.target.value)}
-          spellCheck={false}
-          rows={lineCount}
-          aria-label="Editable code"
-          className={`${CODE_TEXT} bg-transparent px-4 sm:px-5 py-4 text-sm sm:text-[15px] leading-relaxed font-mono w-full resize-y focus:outline-none whitespace-pre`}
+          onChange={setCode}
+          language="python"
+          minLines={primaryLines}
+          ariaLabel="Primary editable code"
         />
         {isEdited && (
           <button
@@ -141,17 +218,12 @@ export function CodePredict({ data }: { data: CodePredictData }) {
       <div className="p-4 sm:p-5 space-y-3">
         {/* Run controls */}
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleRun}
-            disabled={runStatus === "loading" || runStatus === "running"}
-            className={`${BTN_PRIMARY} disabled:opacity-60 disabled:cursor-wait`}
-          >
-            {runStatus === "loading" && "Loading Python runtime…"}
-            {runStatus === "running" && "Running…"}
-            {runStatus === "idle" && "Run code"}
-            {runStatus === "done" && "Run again"}
-          </button>
+          <RunButton
+            status={runStatus}
+            onClick={runPrimary}
+            idleLabel="Run code"
+            doneLabel="Run again"
+          />
           {isEdited && (
             <span className="text-xs text-amber-600 font-medium">Code edited</span>
           )}
@@ -168,18 +240,7 @@ export function CodePredict({ data }: { data: CodePredictData }) {
             <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">
               Output:
             </span>
-            {runResult.error ? (
-              <pre className="bg-red-50 text-red-800 border border-red-200 px-3 py-2 rounded text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-                {runResult.error}
-                {runResult.stderr && "\n" + runResult.stderr}
-              </pre>
-            ) : (
-              <CodeBlock
-                code={runResult.stdout || "(no output)"}
-                language="text"
-                className="rounded"
-              />
-            )}
+            <RunOutput result={runResult} />
           </div>
         )}
 
@@ -224,6 +285,67 @@ export function CodePredict({ data }: { data: CodePredictData }) {
             )}
           </div>
         )}
+      </div>
+
+      {/* ── Scratch pad ─────────────────────────────────────────── */}
+      <div className="border-t border-zinc-100">
+        <div className="px-4 sm:px-5 py-3 bg-zinc-50 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            <span className="text-xs font-semibold tracking-wide uppercase text-zinc-500">
+              Scratch pad
+            </span>
+          </div>
+          <span className="text-[10px] uppercase tracking-wide font-mono text-zinc-400">
+            ⌘/Ctrl + ↵ to run
+          </span>
+        </div>
+        <div className="relative" onKeyDown={onScratchKeyDown}>
+          <CodeEditor
+            value={scratchCode}
+            onChange={setScratchCode}
+            language="python"
+            minLines={scratchLines}
+            placeholder="# Try your own Python — runs in the same Pyodide kernel as the primary block."
+            ariaLabel="Scratch pad code"
+          />
+        </div>
+        <div className="p-4 sm:p-5 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <RunButton
+              status={scratchStatus}
+              onClick={runScratch}
+              idleLabel="Run scratch"
+              doneLabel="Run again"
+            />
+            {scratchCode && (
+              <button
+                type="button"
+                onClick={() => {
+                  setScratchCode("");
+                  setScratchResult(null);
+                  setScratchStatus("idle");
+                }}
+                className="text-xs text-zinc-500 hover:text-zinc-800 underline"
+              >
+                Clear
+              </button>
+            )}
+            {scratchStatus === "loading" && (
+              <span className="text-xs text-zinc-500">
+                Loading Pyodide runtime…
+              </span>
+            )}
+          </div>
+          {scratchResult && (
+            <div className="text-sm space-y-1">
+              <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">
+                Output:
+              </span>
+              <RunOutput result={scratchResult} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
