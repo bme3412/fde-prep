@@ -147,6 +147,45 @@ export function seedState(): AppState {
         { label: "Anthropic docs — Batches", url: "https://docs.anthropic.com/en/docs/build-with-claude/batch-processing" },
       ],
     ),
+    topic(
+      "Error handling, retries & rate limits",
+      "anthropic_sdk",
+      "Master the Anthropic SDK error hierarchy (`APIStatusError`, `RateLimitError`, `APIConnectionError`, `OverloadedError`). Know which status codes are retry-worthy (429/5xx/529) vs not (4xx), how the SDK's built-in retries work, and how to write exponential backoff with jitter on top. Use `retry-after` and `anthropic-ratelimit-*` headers for adaptive backoff. Always log the `request-id` for support.",
+      60,
+      [
+        { label: "Anthropic docs — Errors", url: "https://docs.anthropic.com/en/api/errors" },
+        { label: "Anthropic docs — Rate limits", url: "https://docs.anthropic.com/en/api/rate-limits" },
+      ],
+    ),
+    topic(
+      "Token counting & context budgeting",
+      "anthropic_sdk",
+      "Use `client.messages.count_tokens()` to size prompts before sending. Budget messages so input + `max_tokens` stays under the model context window. Implement sliding-window strategies for long conversations and leave headroom for streamed output. Critical for cost control and avoiding 400s on overlong requests.",
+      45,
+      [
+        { label: "Anthropic docs — Token counting", url: "https://docs.anthropic.com/en/docs/build-with-claude/token-counting" },
+      ],
+    ),
+    topic(
+      "Vision & PDF inputs",
+      "anthropic_sdk",
+      "Send images and PDFs as message content. Know image content blocks (base64 vs URL source), supported MIME types, the PDF input feature, multi-page handling, and when to OCR upstream vs send native PDFs to the model. Common in customer demos for document-heavy workflows.",
+      60,
+      [
+        { label: "Anthropic docs — Vision", url: "https://docs.anthropic.com/en/docs/build-with-claude/vision" },
+        { label: "Anthropic docs — PDF support", url: "https://docs.anthropic.com/en/docs/build-with-claude/pdf-support" },
+      ],
+    ),
+    topic(
+      "Files API & Citations",
+      "anthropic_sdk",
+      "Upload documents via the Files API and reference them in messages. Enable the citations feature so Claude returns source references inline with its answer. Parse `citations` blocks in the response and surface them in your UI. The cleanest path to a doc-grounded answer with provenance.",
+      75,
+      [
+        { label: "Anthropic docs — Files API", url: "https://docs.anthropic.com/en/docs/build-with-claude/files" },
+        { label: "Anthropic docs — Citations", url: "https://docs.anthropic.com/en/docs/build-with-claude/citations" },
+      ],
+    ),
 
     // ── Evals ────────────────────────────────────────────────────────────
     topic(

@@ -2,6 +2,7 @@ import type { StudyGuide } from "../guide-types";
 import { bashGuide } from "./bash";
 import { bm25HybridRetrievalGuide } from "./bm25-hybrid-retrieval";
 import { collectionsGuide } from "./collections";
+import { errorHandlingRetriesGuide } from "./error-handling-retries";
 import { gitGuide } from "./git";
 import { itertoolsFunctoolsGuide } from "./itertools-functools";
 import { messagesApiGuide } from "./messages-api";
@@ -12,6 +13,7 @@ const guides: StudyGuide[] = [
   bashGuide,
   bm25HybridRetrievalGuide,
   collectionsGuide,
+  errorHandlingRetriesGuide,
   gitGuide,
   itertoolsFunctoolsGuide,
   messagesApiGuide,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import Markdown from "react-markdown";
+import { useState, type ComponentPropsWithoutRef } from "react";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type {
   CodePredict as CodePredictData,
@@ -15,6 +15,7 @@ import type {
   MultipleChoice as MultipleChoiceData,
 } from "@/lib/guide-types";
 import { runPython, type RunResult } from "@/lib/pyodide-runtime";
+import { CodeBlock } from "./CodeBlock";
 
 /*
  * Design system:
@@ -27,10 +28,41 @@ import { runPython, type RunResult } from "@/lib/pyodide-runtime";
 
 const CODE_BG = "bg-[#1e293b]";
 const CODE_TEXT = "text-[#e2e8f0]";
-const CODE_CLASSES = `${CODE_BG} ${CODE_TEXT} px-4 sm:px-5 py-4 text-sm sm:text-[15px] leading-relaxed font-mono overflow-x-auto whitespace-pre`;
 const CARD = "rounded-xl border border-zinc-200 bg-white overflow-hidden";
 const BTN_PRIMARY = "bg-zinc-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-zinc-700 transition-colors active:scale-[0.98]";
 const BTN_PRIMARY_FULL = `w-full sm:w-auto ${BTN_PRIMARY}`;
+
+/*
+ * Markdown renderer overrides: route fenced code blocks (```python ...```)
+ * through our highlighted <CodeBlock>, while inline `code` falls through to
+ * the default styling defined in globals.css (.guide-prose code).
+ */
+const markdownComponents: Components = {
+  pre: ({ children }) => <>{children}</>,
+  code: ({ className, children, ...props }: ComponentPropsWithoutRef<"code">) => {
+    const text = String(children).replace(/\n$/, "");
+    const match = /language-(\w+)/.exec(className || "");
+    // Treat as a block whenever there's a language fence OR the content spans
+    // multiple lines. Fenced blocks WITHOUT a language (```...```) have no
+    // className and would otherwise fall through to the inline branch and lose
+    // their line breaks.
+    const isBlock = match !== null || text.includes("\n");
+    if (isBlock) {
+      return (
+        <CodeBlock
+          code={text}
+          language={match ? match[1] : "text"}
+          className="rounded-lg my-3"
+        />
+      );
+    }
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
+};
 
 function CardHeader({ dot, label, meta }: { dot: string; label: string; meta?: string }) {
   return (
@@ -142,9 +174,11 @@ export function CodePredict({ data }: { data: CodePredictData }) {
                 {runResult.stderr && "\n" + runResult.stderr}
               </pre>
             ) : (
-              <pre className={`${CODE_BG} ${CODE_TEXT} px-3 py-2 rounded text-sm sm:text-[15px] font-mono overflow-x-auto whitespace-pre`}>
-                {runResult.stdout || "(no output)"}
-              </pre>
+              <CodeBlock
+                code={runResult.stdout || "(no output)"}
+                language="text"
+                className="rounded"
+              />
             )}
           </div>
         )}
@@ -167,9 +201,11 @@ export function CodePredict({ data }: { data: CodePredictData }) {
                     <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">
                       Expected output{isEdited ? " (for original code)" : ""}:
                     </span>
-                    <pre className={`${CODE_BG} ${CODE_TEXT} px-3 py-2 rounded text-sm sm:text-[15px] font-mono overflow-x-auto whitespace-pre`}>
-                      {data.output}
-                    </pre>
+                    <CodeBlock
+                      code={data.output}
+                      language="text"
+                      className="rounded"
+                    />
                   </div>
                 )}
                 {data.explanation && (
@@ -203,7 +239,7 @@ export function ScenarioPredict({ data }: { data: ScenarioPredictData }) {
     <div className={CARD}>
       <CardHeader dot="bg-zinc-800" label="Scenario" meta={data.label} />
 
-      <pre className={CODE_CLASSES}>{data.scenario}</pre>
+      <CodeBlock code={data.scenario} language={data.language} />
 
       <div className="p-4 sm:p-5 space-y-3">
         <div className="text-sm font-medium text-zinc-800">{data.question}</div>
@@ -232,9 +268,11 @@ export function ScenarioPredict({ data }: { data: ScenarioPredictData }) {
             )}
             <div className="text-sm">
               <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Answer:</span>
-              <pre className={`mt-1 ${CODE_BG} ${CODE_TEXT} px-3 py-2 rounded text-sm sm:text-[15px] font-mono overflow-x-auto whitespace-pre`}>
-                {data.answer}
-              </pre>
+              <CodeBlock
+                code={data.answer}
+                language={data.language}
+                className="mt-1 rounded"
+              />
             </div>
             <div className="text-sm text-zinc-600 bg-zinc-50 rounded-lg p-4 border border-zinc-100 leading-relaxed">
               {data.explanation}
@@ -386,7 +424,7 @@ export function MiniChallenge({ data }: { data: MiniChallengeData }) {
       <div className="p-4 sm:p-5 space-y-5">
         {/* Prompt */}
         <div className="guide-prose text-sm text-zinc-700">
-          <Markdown remarkPlugins={[remarkGfm]}>{data.prompt}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{data.prompt}</Markdown>
         </div>
 
         {/* Hints */}
@@ -435,7 +473,7 @@ export function MiniChallenge({ data }: { data: MiniChallengeData }) {
               <div className={`${CODE_BG} px-4 py-1.5 text-xs text-zinc-500 font-mono border-b border-white/10`}>
                 reference solution
               </div>
-              <pre className={CODE_CLASSES}>{data.solution}</pre>
+              <CodeBlock code={data.solution} language="python" />
             </div>
             <div className="text-sm bg-zinc-50 rounded-lg p-4 border border-zinc-100 leading-relaxed text-zinc-700">
               <span className="font-semibold text-zinc-900">Takeaway:</span> {data.takeaway}
@@ -452,7 +490,7 @@ export function MiniChallenge({ data }: { data: MiniChallengeData }) {
 export function Prose({ markdown }: { markdown: string }) {
   return (
     <div className="guide-prose text-sm text-zinc-700 leading-relaxed">
-      <Markdown remarkPlugins={[remarkGfm]}>{markdown}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{markdown}</Markdown>
     </div>
   );
 }
@@ -466,7 +504,7 @@ export function KeyInsightBlock({ data }: { data: KeyInsightData }) {
         {data.label}
       </div>
       <div className="guide-prose text-sm text-zinc-800 leading-relaxed">
-        <Markdown remarkPlugins={[remarkGfm]}>{data.insight}</Markdown>
+        <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{data.insight}</Markdown>
       </div>
     </div>
   );
@@ -539,7 +577,7 @@ export function CodeComparisonBlock({ data }: { data: CodeComparisonData }) {
               {data.left.title}
             </span>
           </div>
-          <pre className={CODE_CLASSES}>{data.left.code}</pre>
+          <CodeBlock code={data.left.code} language="python" />
           {data.left.annotation && (
             <div className="px-4 py-2 text-xs text-zinc-500 bg-zinc-50 border-t border-zinc-100">
               {data.left.annotation}
@@ -553,7 +591,7 @@ export function CodeComparisonBlock({ data }: { data: CodeComparisonData }) {
               {data.right.title}
             </span>
           </div>
-          <pre className={CODE_CLASSES}>{data.right.code}</pre>
+          <CodeBlock code={data.right.code} language="python" />
           {data.right.annotation && (
             <div className="px-4 py-2 text-xs text-zinc-500 bg-zinc-50 border-t border-zinc-100">
               {data.right.annotation}
@@ -581,7 +619,7 @@ export function WarmUpBlock({ data }: { data: WarmUpData }) {
       <CardHeader dot="bg-emerald-500" label="Try It" meta={data.title} />
       <div className="p-4 sm:p-5 space-y-3">
         <div className="guide-prose text-sm text-zinc-700">
-          <Markdown remarkPlugins={[remarkGfm]}>{data.prompt}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{data.prompt}</Markdown>
         </div>
         {!revealed ? (
           <>
@@ -640,12 +678,12 @@ export function MultipleChoiceBlock({ data }: { data: MultipleChoiceData }) {
       <div className="p-4 sm:p-5 space-y-4">
         {/* Prompt */}
         <div className="guide-prose text-sm text-zinc-800 leading-relaxed">
-          <Markdown remarkPlugins={[remarkGfm]}>{data.prompt}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{data.prompt}</Markdown>
         </div>
 
         {/* Optional code block */}
         {data.code && (
-          <pre className={`${CODE_CLASSES} rounded-lg`}>{data.code}</pre>
+          <CodeBlock code={data.code} language="python" className="rounded-lg" />
         )}
 
         {/* Choices */}
