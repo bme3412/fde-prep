@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type ComponentPropsWithoutRef } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ComponentPropsWithoutRef,
+} from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type {
@@ -15,6 +21,15 @@ import type {
   MultipleChoice as MultipleChoiceData,
 } from "@/lib/guide-types";
 import { runPython, type RunResult } from "@/lib/pyodide-runtime";
+import {
+  saveRun,
+  deleteRun,
+  clearRuns,
+  subscribeToRuns,
+  formatRelative,
+  formatAbsolute,
+  type SavedRun,
+} from "@/lib/saved-runs";
 import { CodeBlock } from "./CodeBlock";
 import { CodeEditor } from "./CodeEditor";
 
@@ -130,6 +145,127 @@ function RunButton({
   );
 }
 
+function SavedRunsPanel({
+  runs,
+  open,
+  onToggle,
+  onLoad,
+  onDelete,
+  onClearAll,
+}: {
+  runs: SavedRun[];
+  open: boolean;
+  onToggle: () => void;
+  onLoad: (entry: SavedRun) => void;
+  onDelete: (id: string) => void;
+  onClearAll: () => void;
+}) {
+  return (
+    <div className="border border-zinc-200 rounded-lg bg-zinc-50/50">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-zinc-600 hover:text-zinc-900"
+      >
+        <span className="flex items-center gap-2">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            className={`text-zinc-400 transition-transform ${open ? "rotate-90" : ""}`}
+          >
+            <path
+              d="M6 4L10 8L6 12"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Saved runs
+          <span className="text-zinc-400 font-mono">{runs.length}</span>
+        </span>
+        {open && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Delete all ${runs.length} saved run(s)?`)) {
+                onClearAll();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                if (confirm(`Delete all ${runs.length} saved run(s)?`)) {
+                  onClearAll();
+                }
+              }
+            }}
+            className="text-[10px] uppercase tracking-wide text-zinc-400 hover:text-red-600 cursor-pointer"
+          >
+            Clear all
+          </span>
+        )}
+      </button>
+      {open && (
+        <ul className="divide-y divide-zinc-200 border-t border-zinc-200">
+          {runs.map((r) => {
+            const firstLine =
+              r.code.split("\n").find((l) => l.trim().length > 0) ?? "";
+            const preview =
+              firstLine.length > 60 ? firstLine.slice(0, 60) + "…" : firstLine;
+            const errored = Boolean(r.error || (r.stderr && r.stderr.trim()));
+            return (
+              <li key={r.id} className="px-3 py-2.5 flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                    errored ? "bg-red-400" : "bg-emerald-500"
+                  }`}
+                  title={errored ? "Run errored" : "Run succeeded"}
+                />
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-xs text-zinc-500 font-mono"
+                    title={formatAbsolute(r.timestamp)}
+                  >
+                    {formatRelative(r.timestamp)}
+                  </div>
+                  <code className="block text-[13px] text-zinc-800 font-mono truncate">
+                    {preview || "(empty)"}
+                  </code>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onLoad(r)}
+                    className="text-xs font-medium text-zinc-700 hover:text-zinc-900 underline"
+                  >
+                    Load
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(r.id)}
+                    className="text-xs text-zinc-400 hover:text-red-600"
+                    aria-label="Delete saved run"
+                    title="Delete"
+                  >
+                    &#10005;
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function CodePredict({ data }: { data: CodePredictData }) {
   // Primary editor — prefilled with the prediction prompt code.
   const [code, setCode] = useState(data.code);
@@ -141,6 +277,32 @@ export function CodePredict({ data }: { data: CodePredictData }) {
   const [scratchCode, setScratchCode] = useState("");
   const [scratchStatus, setScratchStatus] = useState<RunStatus>("idle");
   const [scratchResult, setScratchResult] = useState<RunResult | null>(null);
+
+  // Saved runs (manual persistence to localStorage, keyed by block label).
+  // useSyncExternalStore avoids SSR/hydration mismatch and stays in sync
+  // with writes from other components/tabs.
+  const savedScope = `scratch:${data.label}`;
+  const getSnapshot = useCallback(() => {
+    if (typeof window === "undefined") return "[]";
+    return (
+      window.localStorage.getItem(`fde-prep:saved-runs:v1:${savedScope}`) ??
+      "[]"
+    );
+  }, [savedScope]);
+  const rawSaved = useSyncExternalStore(
+    subscribeToRuns,
+    getSnapshot,
+    () => "[]",
+  );
+  const savedRuns = useMemo<SavedRun[]>(() => {
+    try {
+      const parsed = JSON.parse(rawSaved);
+      return Array.isArray(parsed) ? (parsed as SavedRun[]) : [];
+    } catch {
+      return [];
+    }
+  }, [rawSaved]);
+  const [showSaved, setShowSaved] = useState(false);
 
   const isEdited = code !== data.code;
   const primaryLines = Math.max(4, code.split("\n").length);
@@ -183,12 +345,52 @@ export function CodePredict({ data }: { data: CodePredictData }) {
     }
   }
 
-  // Ctrl/Cmd+Enter in the scratch pad triggers Run.
+  // Ctrl/Cmd+Enter in the scratch pad triggers Run; Cmd+S saves the run.
   function onScratchKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       runScratch();
+      return;
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      saveScratchRun();
+    }
+  }
+
+  function saveScratchRun() {
+    if (!scratchCode.trim()) return;
+    saveRun(savedScope, {
+      code: scratchCode,
+      stdout: scratchResult?.stdout,
+      stderr: scratchResult?.stderr,
+      error: scratchResult?.error ?? undefined,
+    });
+    setShowSaved(true);
+  }
+
+  function loadSavedRun(entry: SavedRun) {
+    setScratchCode(entry.code);
+    // Restore the captured output so the user sees the snapshot's result.
+    if (entry.stdout || entry.stderr || entry.error) {
+      setScratchResult({
+        stdout: entry.stdout ?? "",
+        stderr: entry.stderr ?? "",
+        error: entry.error ?? null,
+      });
+      setScratchStatus("done");
+    } else {
+      setScratchResult(null);
+      setScratchStatus("idle");
+    }
+  }
+
+  function removeSavedRun(id: string) {
+    deleteRun(savedScope, id);
+  }
+
+  function clearAllSaved() {
+    clearRuns(savedScope);
   }
 
   return (
@@ -202,6 +404,7 @@ export function CodePredict({ data }: { data: CodePredictData }) {
           onChange={setCode}
           language="python"
           minLines={primaryLines}
+          showLineNumbers
           ariaLabel="Primary editable code"
         />
         {isEdited && (
@@ -297,7 +500,7 @@ export function CodePredict({ data }: { data: CodePredictData }) {
             </span>
           </div>
           <span className="text-[10px] uppercase tracking-wide font-mono text-zinc-400">
-            ⌘/Ctrl + ↵ to run
+            ⌘↵ run · ⌘S save · ⌘/ comment
           </span>
         </div>
         <div className="relative" onKeyDown={onScratchKeyDown}>
@@ -306,6 +509,7 @@ export function CodePredict({ data }: { data: CodePredictData }) {
             onChange={setScratchCode}
             language="python"
             minLines={scratchLines}
+            showLineNumbers
             placeholder="# Try your own Python — runs in the same Pyodide kernel as the primary block."
             ariaLabel="Scratch pad code"
           />
@@ -318,6 +522,15 @@ export function CodePredict({ data }: { data: CodePredictData }) {
               idleLabel="Run scratch"
               doneLabel="Run again"
             />
+            <button
+              type="button"
+              onClick={saveScratchRun}
+              disabled={!scratchCode.trim()}
+              className="text-xs font-medium text-zinc-700 hover:text-zinc-900 border border-zinc-300 hover:border-zinc-400 rounded px-2.5 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Save this run with a timestamp (⌘S)"
+            >
+              Save run
+            </button>
             {scratchCode && (
               <button
                 type="button"
@@ -344,6 +557,18 @@ export function CodePredict({ data }: { data: CodePredictData }) {
               </span>
               <RunOutput result={scratchResult} />
             </div>
+          )}
+
+          {/* Saved runs ─ collapsible history of manually-saved snapshots. */}
+          {savedRuns.length > 0 && (
+            <SavedRunsPanel
+              runs={savedRuns}
+              open={showSaved}
+              onToggle={() => setShowSaved((s) => !s)}
+              onLoad={loadSavedRun}
+              onDelete={removeSavedRun}
+              onClearAll={clearAllSaved}
+            />
           )}
         </div>
       </div>
