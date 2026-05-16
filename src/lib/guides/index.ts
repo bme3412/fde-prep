@@ -12,6 +12,7 @@ import { itertoolsFunctoolsGuide } from "./itertools-functools";
 import { messagesApiGuide } from "./messages-api";
 import { pydanticV2FundamentalsGuide } from "./pydantic-v2-fundamentals";
 import { streamingPromptCachingGuide } from "./streaming-prompt-caching";
+import { testingPytestFixturesMockingGuide } from "./testing-pytest-fixtures-mocking";
 import { toolUseLoopGuide } from "./tool-use-loop";
 import { visionPdfInputsGuide } from "./vision-pdf-inputs";
 
@@ -30,6 +31,7 @@ const guides: StudyGuide[] = [
   messagesApiGuide,
   pydanticV2FundamentalsGuide,
   streamingPromptCachingGuide,
+  testingPytestFixturesMockingGuide,
   toolUseLoopGuide,
   visionPdfInputsGuide,
 ];
