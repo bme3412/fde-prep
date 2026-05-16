@@ -2,6 +2,11 @@ import { getState } from "@/lib/store";
 import { getGuideForTopic } from "@/lib/guides";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+
+// Force dynamic rendering so `topic.secondsStudied` (read from fs each request)
+// reflects the latest accumulated total on every navigation, not a stale
+// build-time / route-cached snapshot.
+export const dynamic = "force-dynamic";
 import {
   CodePredict,
   ScenarioPredict,
@@ -14,6 +19,7 @@ import {
   WarmUpBlock,
   MultipleChoiceBlock,
   GuideProgress,
+  SectionCheckbox,
 } from "./components";
 import type { Flashcard as FlashcardData } from "@/lib/guide-types";
 import { StudyTimer } from "@/components/StudyTimer";
@@ -125,13 +131,18 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
           return (
             <section key={si} id={`section-${si}`} className="scroll-mt-8">
               {/* Section header */}
-              <div className="flex items-baseline gap-3 mb-6 pb-3 border-b-2 border-zinc-200">
+              <div className="flex items-center gap-3 mb-6 pb-3 border-b-2 border-zinc-200">
                 <span className="text-3xl font-bold text-zinc-200 font-mono leading-none">
                   {String(si + 1).padStart(2, "0")}
                 </span>
-                <h2 className="text-xl font-bold text-zinc-900">
+                <h2 className="text-xl font-bold text-zinc-900 flex-1 min-w-0">
                   {section.title}
                 </h2>
+                <SectionCheckbox
+                  topicSlug={guide.topicSlug}
+                  sectionIndex={si}
+                  sectionTitle={section.title}
+                />
               </div>
 
               {/* Section blocks */}

@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
   type ComponentPropsWithoutRef,
+  type CSSProperties,
 } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1241,6 +1242,139 @@ export function GuideProgress({
         <span className="font-semibold text-zinc-800">{total} exercises:</span>
         <span>{items.join(" · ")}</span>
       </div>
+    </div>
+  );
+}
+
+// ── Section completion checkbox ────────────────────────────────────────────
+//
+// Per-section "done" toggle stored in localStorage. Clicking the unchecked
+// box triggers a brief celebration animation (scale-pop + green pulse + tiny
+// confetti burst) and stamps `completedAt` with the current ISO date. Clicking
+// a completed box clears the state.
+
+type SectionCompletion = {
+  done: boolean;
+  completedAt: string | null;
+};
+
+const SECTION_CHECKBOX_INITIAL: SectionCompletion = {
+  done: false,
+  completedAt: null,
+};
+
+function formatCompletionDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+export function SectionCheckbox({
+  topicSlug,
+  sectionIndex,
+  sectionTitle,
+}: {
+  topicSlug: string;
+  sectionIndex: number;
+  sectionTitle: string;
+}) {
+  const scope = `${topicSlug}:section-done:${sectionIndex}:${slugify(sectionTitle)}`;
+  const [state, setState] = usePersistedState<SectionCompletion>(
+    scope,
+    SECTION_CHECKBOX_INITIAL,
+  );
+  const [celebrating, setCelebrating] = useState(false);
+
+  const toggle = useCallback(() => {
+    if (state.done) {
+      setState({ done: false, completedAt: null });
+      setCelebrating(false);
+      return;
+    }
+    setState({ done: true, completedAt: new Date().toISOString() });
+    setCelebrating(true);
+    // Animation duration matches the keyframes below (~900ms).
+    window.setTimeout(() => setCelebrating(false), 900);
+  }, [state.done, setState]);
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-pressed={state.done}
+        aria-label={
+          state.done
+            ? `Mark section "${sectionTitle}" as not done`
+            : `Mark section "${sectionTitle}" as done`
+        }
+        className={[
+          "relative inline-flex items-center justify-center w-7 h-7 rounded-md border-2 transition-all duration-150 active:scale-90",
+          state.done
+            ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600"
+            : "bg-white border-zinc-300 hover:border-emerald-400 hover:bg-emerald-50",
+          celebrating ? "section-checkbox-pop" : "",
+        ].join(" ")}
+      >
+        {/* Check icon — appears when done */}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          className={[
+            "transition-all duration-200",
+            state.done ? "scale-100 opacity-100" : "scale-50 opacity-0",
+          ].join(" ")}
+          aria-hidden
+        >
+          <path
+            d="M3.5 8.5L6.5 11.5L12.5 4.5"
+            stroke="currentColor"
+            strokeWidth="2.25"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+
+        {/* Celebration ring + sparkles */}
+        {celebrating && (
+          <>
+            <span
+              className="absolute inset-0 rounded-md section-checkbox-ring pointer-events-none"
+              aria-hidden
+            />
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <span
+                key={i}
+                className="absolute w-1.5 h-1.5 rounded-full bg-emerald-400 pointer-events-none section-checkbox-spark"
+                style={
+                  {
+                    // Spokes around the box at 60° increments.
+                    "--spark-x": `${Math.cos((i / 6) * Math.PI * 2) * 22}px`,
+                    "--spark-y": `${Math.sin((i / 6) * Math.PI * 2) * 22}px`,
+                    animationDelay: `${i * 20}ms`,
+                  } as CSSProperties
+                }
+                aria-hidden
+              />
+            ))}
+          </>
+        )}
+      </button>
+
+      {state.done && state.completedAt && (
+        <span className="text-xs text-emerald-700 font-medium tabular-nums whitespace-nowrap">
+          {formatCompletionDate(state.completedAt)}
+        </span>
+      )}
     </div>
   );
 }

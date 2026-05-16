@@ -7,6 +7,11 @@ import Link from "next/link";
 import { TopicDescription, TopicNotesForm } from "./client";
 import { StudyTimer } from "@/components/StudyTimer";
 
+// Force dynamic rendering so the persisted `secondsStudied` total stays fresh
+// across navigations — otherwise Next.js caches the RSC and the timer resets
+// to a stale base on every page load.
+export const dynamic = "force-dynamic";
+
 export default async function TopicDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const state = getState();
