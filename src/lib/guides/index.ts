@@ -6,6 +6,7 @@ import { errorHandlingRetriesGuide } from "./error-handling-retries";
 import { gitGuide } from "./git";
 import { itertoolsFunctoolsGuide } from "./itertools-functools";
 import { messagesApiGuide } from "./messages-api";
+import { streamingPromptCachingGuide } from "./streaming-prompt-caching";
 import { toolUseLoopGuide } from "./tool-use-loop";
 
 /** All available study guides, keyed by topic title (lowercased, exact match). */
@@ -17,6 +18,7 @@ const guides: StudyGuide[] = [
   gitGuide,
   itertoolsFunctoolsGuide,
   messagesApiGuide,
+  streamingPromptCachingGuide,
   toolUseLoopGuide,
 ];
 
