@@ -16,6 +16,7 @@ import {
   GuideProgress,
 } from "./components";
 import type { Flashcard as FlashcardData } from "@/lib/guide-types";
+import { StudyTimer } from "@/components/StudyTimer";
 
 export default async function GuidePage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -76,6 +77,9 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
           Work through each section top to bottom. Predict outputs before revealing.
           Attempt challenges before checking solutions.
         </p>
+        <div className="mt-3">
+          <StudyTimer topicId={topic.id} initialSeconds={topic.secondsStudied} />
+        </div>
       </div>
 
       {/* ── Progress summary ─────────────────────────────────────────── */}
@@ -137,27 +141,64 @@ export default async function GuidePage(props: { params: Promise<{ id: string }>
                     case "prose":
                       return <Prose key={bi} markdown={block.markdown} />;
                     case "code_predict":
-                      return <CodePredict key={bi} data={block} />;
+                      return (
+                        <CodePredict
+                          key={bi}
+                          data={block}
+                          topicSlug={guide.topicSlug}
+                        />
+                      );
                     case "scenario_predict":
-                      return <ScenarioPredict key={bi} data={block} />;
+                      return (
+                        <ScenarioPredict
+                          key={bi}
+                          data={block}
+                          topicSlug={guide.topicSlug}
+                        />
+                      );
                     case "key_insight":
                       return <KeyInsightBlock key={bi} data={block} />;
                     case "mini_challenge":
-                      return <MiniChallenge key={bi} data={block} />;
+                      return (
+                        <MiniChallenge
+                          key={bi}
+                          data={block}
+                          topicSlug={guide.topicSlug}
+                        />
+                      );
                     case "method_ref":
                       return <MethodRefBlock key={bi} data={block} />;
                     case "code_comparison":
                       return <CodeComparisonBlock key={bi} data={block} />;
                     case "warm_up":
-                      return <WarmUpBlock key={bi} data={block} />;
+                      return (
+                        <WarmUpBlock
+                          key={bi}
+                          data={block}
+                          topicSlug={guide.topicSlug}
+                        />
+                      );
                     case "multiple_choice":
-                      return <MultipleChoiceBlock key={bi} data={block} />;
+                      return (
+                        <MultipleChoiceBlock
+                          key={bi}
+                          data={block}
+                          topicSlug={guide.topicSlug}
+                        />
+                      );
                     case "flashcard":
                       if (
                         flashcards.length > 0 &&
                         section.blocks.indexOf(flashcards[0]) === bi
                       ) {
-                        return <FlashcardDeck key={bi} cards={flashcards} />;
+                        return (
+                          <FlashcardDeck
+                            key={bi}
+                            cards={flashcards}
+                            topicSlug={guide.topicSlug}
+                            sectionTitle={section.title}
+                          />
+                        );
                       }
                       return null;
                     default:

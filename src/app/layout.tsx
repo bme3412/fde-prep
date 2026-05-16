@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FDE Prep",
-  description: "Anthropic Forward Deployed Engineer interview prep tracker",
+  title: "Applied AI Prep",
+  description: "Anthropic Applied AI engineer interview prep tracker",
 };
 
 const NAV_LINKS = [
@@ -35,7 +35,7 @@ export default function RootLayout({
         <header className="border-b border-zinc-200 bg-white">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <Link href="/topics" className="font-semibold text-lg tracking-tight">
-              FDE Prep
+              Applied AI Prep
             </Link>
             <nav className="flex gap-4 text-sm">
               {NAV_LINKS.map((link) => (

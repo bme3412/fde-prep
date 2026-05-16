@@ -31,6 +31,28 @@ function writeState(state: AppState): void {
   }
 }
 
+/**
+ * Merge any newly-added seed entries (topics, practiceReps) into an existing
+ * persisted state. Preserves user-edited fields (status/notes/completedAt) on
+ * entries that already exist; appends new entries from the seed.
+ */
+function mergeNewSeedEntries(existing: AppState): AppState {
+  const seed = seedState();
+  const existingTopicIds = new Set(existing.topics.map((t) => t.id));
+  const newTopics = seed.topics.filter((t) => !existingTopicIds.has(t.id));
+
+  const existingRepIds = new Set(existing.practiceReps.map((r) => r.id));
+  const newReps = seed.practiceReps.filter((r) => !existingRepIds.has(r.id));
+
+  if (newTopics.length === 0 && newReps.length === 0) return existing;
+
+  return {
+    ...existing,
+    topics: [...existing.topics, ...newTopics],
+    practiceReps: [...existing.practiceReps, ...newReps],
+  };
+}
+
 /** Read and parse the state, falling back to in-memory seed on read-only filesystems. */
 export function getState(): AppState {
   if (cachedState) return cachedState;
@@ -39,8 +61,12 @@ export function getState(): AppState {
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
-      cachedState = AppStateSchema.parse(raw);
-      return cachedState;
+      const parsed = AppStateSchema.parse(raw);
+      const merged = mergeNewSeedEntries(parsed);
+      // Persist if we added anything new (best-effort)
+      if (merged !== parsed) writeState(merged);
+      else cachedState = parsed;
+      return merged;
     }
   } catch {
     // Fall through to seed

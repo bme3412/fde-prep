@@ -5,6 +5,7 @@ import { CATEGORY_LABELS, STATUS_LABELS, STATUSES } from "@/lib/types";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { TopicDescription, TopicNotesForm } from "./client";
+import { StudyTimer } from "@/components/StudyTimer";
 
 export default async function TopicDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -38,7 +39,21 @@ export default async function TopicDetailPage(props: { params: Promise<{ id: str
             <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 leading-tight">
               {topic.title}
             </h1>
-            <p className="text-sm text-zinc-500 mt-1.5">~{topic.estimatedMinutes} min estimated</p>
+            <p className="text-sm text-zinc-500 mt-1.5">
+              ~{topic.estimatedMinutes} min estimated
+              {topic.secondsStudied > 0 && (
+                <>
+                  {" "}
+                  &middot; {Math.floor(topic.secondsStudied / 60)} min studied
+                </>
+              )}
+            </p>
+            <div className="mt-3">
+              <StudyTimer
+                topicId={topic.id}
+                initialSeconds={topic.secondsStudied}
+              />
+            </div>
           </div>
 
           {/* Status form — stacks on mobile, inline on desktop */}

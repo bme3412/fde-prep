@@ -30,6 +30,7 @@ import {
   formatAbsolute,
   type SavedRun,
 } from "@/lib/saved-runs";
+import { usePersistedState, slugify } from "@/lib/guide-state";
 import { CodeBlock } from "./CodeBlock";
 import { CodeEditor } from "./CodeEditor";
 
@@ -266,15 +267,32 @@ function SavedRunsPanel({
   );
 }
 
-export function CodePredict({ data }: { data: CodePredictData }) {
-  // Primary editor — prefilled with the prediction prompt code.
-  const [code, setCode] = useState(data.code);
+export function CodePredict({
+  data,
+  topicSlug,
+}: {
+  data: CodePredictData;
+  topicSlug: string;
+}) {
+  // Persisted state — edits + reveal survive reload.
+  // Run output is transient (re-runs are cheap; cached Pyodide handles it).
+  const persistScope = `${topicSlug}:code_predict:${slugify(data.label)}`;
+  const [persisted, setPersisted] = usePersistedState(persistScope, {
+    code: data.code,
+    scratchCode: "",
+    showExplanation: false,
+  });
+  const code = persisted.code;
+  const scratchCode = persisted.scratchCode;
+  const showExplanation = persisted.showExplanation;
+  const setCode = (v: string) => setPersisted((s) => ({ ...s, code: v }));
+  const setScratchCode = (v: string) =>
+    setPersisted((s) => ({ ...s, scratchCode: v }));
+  const setShowExplanation = (v: boolean) =>
+    setPersisted((s) => ({ ...s, showExplanation: v }));
+
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
-  const [showExplanation, setShowExplanation] = useState(false);
-
-  // Scratch editor — empty, for the user's own experiments.
-  const [scratchCode, setScratchCode] = useState("");
   const [scratchStatus, setScratchStatus] = useState<RunStatus>("idle");
   const [scratchResult, setScratchResult] = useState<RunResult | null>(null);
 
@@ -578,9 +596,23 @@ export function CodePredict({ data }: { data: CodePredictData }) {
 
 // ── ScenarioPredict ────────────────────────────────────────────────────────
 
-export function ScenarioPredict({ data }: { data: ScenarioPredictData }) {
-  const [revealed, setRevealed] = useState(false);
-  const [userGuess, setUserGuess] = useState("");
+export function ScenarioPredict({
+  data,
+  topicSlug,
+}: {
+  data: ScenarioPredictData;
+  topicSlug: string;
+}) {
+  const scope = `${topicSlug}:scenario_predict:${slugify(data.label)}`;
+  const [state, setState, clearState] = usePersistedState(scope, {
+    revealed: false,
+    userGuess: "",
+  });
+  const { revealed, userGuess } = state;
+  const setRevealed = (v: boolean) =>
+    setState((s) => ({ ...s, revealed: v }));
+  const setUserGuess = (v: string) =>
+    setState((s) => ({ ...s, userGuess: v }));
 
   return (
     <div className={CARD}>
@@ -626,7 +658,7 @@ export function ScenarioPredict({ data }: { data: ScenarioPredictData }) {
             </div>
             <button
               type="button"
-              onClick={() => { setRevealed(false); setUserGuess(""); }}
+              onClick={() => clearState()}
               className="text-xs text-zinc-400 hover:text-zinc-600 underline"
             >
               Reset
@@ -640,18 +672,42 @@ export function ScenarioPredict({ data }: { data: ScenarioPredictData }) {
 
 // ── FlashcardDeck ──────────────────────────────────────────────────────────
 
-export function FlashcardDeck({ cards }: { cards: FlashcardData[] }) {
-  const [index, setIndex] = useState(0);
+export function FlashcardDeck({
+  cards,
+  topicSlug,
+  sectionTitle,
+}: {
+  cards: FlashcardData[];
+  topicSlug: string;
+  sectionTitle: string;
+}) {
+  const scope = `${topicSlug}:flashcards:${slugify(sectionTitle)}`;
+  const [progress, setProgress, clearProgress] = usePersistedState(scope, {
+    index: 0,
+    score: { knew: 0, missed: 0 },
+  });
+  // `flipped` is transient — no benefit to persisting which side of the
+  // current card was face-up at the moment of refresh.
   const [flipped, setFlipped] = useState(false);
-  const [score, setScore] = useState({ knew: 0, missed: 0 });
 
+  const index = progress.index;
+  const score = progress.score;
   const card = cards[index];
   const isFinished = index >= cards.length;
 
   function handleResponse(knew: boolean) {
-    setScore((s) => (knew ? { ...s, knew: s.knew + 1 } : { ...s, missed: s.missed + 1 }));
+    setProgress((p) => ({
+      index: p.index + 1,
+      score: knew
+        ? { ...p.score, knew: p.score.knew + 1 }
+        : { ...p.score, missed: p.score.missed + 1 },
+    }));
     setFlipped(false);
-    setIndex((i) => i + 1);
+  }
+
+  function restart() {
+    clearProgress();
+    setFlipped(false);
   }
 
   if (isFinished) {
@@ -675,7 +731,7 @@ export function FlashcardDeck({ cards }: { cards: FlashcardData[] }) {
         )}
         <button
           type="button"
-          onClick={() => { setIndex(0); setFlipped(false); setScore({ knew: 0, missed: 0 }); }}
+          onClick={restart}
           className={BTN_PRIMARY}
         >
           Restart Deck
@@ -759,10 +815,26 @@ export function FlashcardDeck({ cards }: { cards: FlashcardData[] }) {
 
 // ── MiniChallenge ──────────────────────────────────────────────────────────
 
-export function MiniChallenge({ data }: { data: MiniChallengeData }) {
-  const [hintsRevealed, setHintsRevealed] = useState(0);
-  const [showSolution, setShowSolution] = useState(false);
-  const [userCode, setUserCode] = useState("");
+export function MiniChallenge({
+  data,
+  topicSlug,
+}: {
+  data: MiniChallengeData;
+  topicSlug: string;
+}) {
+  const scope = `${topicSlug}:mini_challenge:${slugify(data.title)}`;
+  const [state, setState] = usePersistedState(scope, {
+    hintsRevealed: 0,
+    showSolution: false,
+    userCode: "",
+  });
+  const { hintsRevealed, showSolution, userCode } = state;
+  const setHintsRevealed = (updater: (n: number) => number) =>
+    setState((s) => ({ ...s, hintsRevealed: updater(s.hintsRevealed) }));
+  const setShowSolution = (v: boolean) =>
+    setState((s) => ({ ...s, showSolution: v }));
+  const setUserCode = (v: string) =>
+    setState((s) => ({ ...s, userCode: v }));
 
   return (
     <div className={CARD}>
@@ -957,9 +1029,23 @@ export function CodeComparisonBlock({ data }: { data: CodeComparisonData }) {
 
 // ── WarmUp — lightweight fill-in-the-blank ────────────────────────────────
 
-export function WarmUpBlock({ data }: { data: WarmUpData }) {
-  const [revealed, setRevealed] = useState(false);
-  const [userAnswer, setUserAnswer] = useState("");
+export function WarmUpBlock({
+  data,
+  topicSlug,
+}: {
+  data: WarmUpData;
+  topicSlug: string;
+}) {
+  const scope = `${topicSlug}:warm_up:${slugify(data.title)}`;
+  const [state, setState, clearState] = usePersistedState(scope, {
+    revealed: false,
+    userAnswer: "",
+  });
+  const { revealed, userAnswer } = state;
+  const setRevealed = (v: boolean) =>
+    setState((s) => ({ ...s, revealed: v }));
+  const setUserAnswer = (v: string) =>
+    setState((s) => ({ ...s, userAnswer: v }));
 
   return (
     <div className={CARD}>
@@ -999,7 +1085,7 @@ export function WarmUpBlock({ data }: { data: WarmUpData }) {
             </div>
             <button
               type="button"
-              onClick={() => { setRevealed(false); setUserAnswer(""); }}
+              onClick={() => clearState()}
               className="text-xs text-zinc-400 hover:text-zinc-600 underline"
             >
               Reset
@@ -1013,8 +1099,18 @@ export function WarmUpBlock({ data }: { data: WarmUpData }) {
 
 // ── MultipleChoice ─────────────────────────────────────────────────────────
 
-export function MultipleChoiceBlock({ data }: { data: MultipleChoiceData }) {
-  const [picked, setPicked] = useState<number | null>(null);
+export function MultipleChoiceBlock({
+  data,
+  topicSlug,
+}: {
+  data: MultipleChoiceData;
+  topicSlug: string;
+}) {
+  const scope = `${topicSlug}:multiple_choice:${slugify(data.title)}`;
+  const [picked, setPicked, clearPicked] = usePersistedState<number | null>(
+    scope,
+    null,
+  );
   const correctIdx = data.choices.findIndex((c) => c.correct);
   const isAnswered = picked !== null;
   const isCorrect = picked === correctIdx;
@@ -1100,7 +1196,7 @@ export function MultipleChoiceBlock({ data }: { data: MultipleChoiceData }) {
             </div>
             <button
               type="button"
-              onClick={() => setPicked(null)}
+              onClick={() => clearPicked()}
               className="text-xs text-zinc-400 hover:text-zinc-600 underline"
             >
               Reset
