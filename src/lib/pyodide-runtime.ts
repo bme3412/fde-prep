@@ -24,6 +24,7 @@ const LOAD_TIMEOUT_MS = 30_000;
 // types live in `pyodide` on npm, which we are not bundling.
 type PyodideAPI = {
   runPythonAsync: (code: string) => Promise<unknown>;
+  loadPackagesFromImports: (code: string) => Promise<void>;
   FS: {
     mkdirTree: (path: string) => void;
     writeFile: (path: string, data: string) => void;
@@ -141,6 +142,15 @@ sys.stderr = io.StringIO()
 `);
   let error: string | null = null;
   try {
+    // Auto-fetch any imported packages bundled with Pyodide (pandas, numpy,
+    // matplotlib, etc.). No-op for stdlib-only snippets. Best-effort: if a
+    // package isn't in Pyodide's index, the import below raises with a clearer
+    // error than this loader would.
+    try {
+      await pyodide.loadPackagesFromImports(code);
+    } catch {
+      // Swallow — let the actual import statement produce the user-facing error.
+    }
     await pyodide.runPythonAsync(code);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);

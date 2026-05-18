@@ -97,6 +97,7 @@ export function normalizeLang(lang: string | undefined): string {
   if (l === "html") return "markup";
   if (l === "css") return "css";
   if (l === "diff") return "diff";
+  if (l === "sql") return "sql";
   return "text";
 }
 
