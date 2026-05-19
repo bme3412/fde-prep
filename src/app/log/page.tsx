@@ -53,7 +53,7 @@ function intensityClass(minutes: number): string {
 
 export default async function LogPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const state = getState();
+  const state = await getState();
 
   const { year, month } = parseMonth(params.month);
   const monthParam = formatMonthParam(year, month);

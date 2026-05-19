@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   let topicFound = false;
   let minuteDelta = 0;
 
-  mutateState((state) => {
+  await mutateState((state) => {
     const topics = state.topics.map((t) => {
       if (t.id !== topicId) return t;
       topicFound = true;

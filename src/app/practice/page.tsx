@@ -1,7 +1,7 @@
 import { getState } from "@/lib/store";
 
-export default function PracticePage() {
-  const state = getState();
+export default async function PracticePage() {
+  const state = await getState();
 
   return (
     <div className="space-y-6">

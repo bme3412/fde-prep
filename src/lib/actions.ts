@@ -17,7 +17,7 @@ export async function updateTopicStatus(formData: FormData) {
     status: formData.get("status"),
   });
 
-  mutateState((state) => ({
+  await mutateState((state) => ({
     ...state,
     topics: state.topics.map((t) =>
       t.id === parsed.id
@@ -41,7 +41,7 @@ export async function updateTopicNotes(formData: FormData) {
     notes: formData.get("notes") as string,
   });
 
-  mutateState((state) => ({
+  await mutateState((state) => ({
     ...state,
     topics: state.topics.map((t) =>
       t.id === parsed.id ? { ...t, notes: parsed.notes } : t,
@@ -60,7 +60,7 @@ export async function logDaily(formData: FormData) {
     reflection: (formData.get("reflection") as string) || "",
   });
 
-  mutateState((state) => {
+  await mutateState((state) => {
     const existing = state.dailyLogs.findIndex((l) => l.date === parsed.date);
     const entry = { id: existing >= 0 ? state.dailyLogs[existing].id : uuid(), ...parsed };
     const dailyLogs =
@@ -90,7 +90,7 @@ export async function completePracticeRep(formData: FormData) {
     retroNotes: (formData.get("retroNotes") as string) || "",
   });
 
-  mutateState((state) => ({
+  await mutateState((state) => ({
     ...state,
     practiceReps: state.practiceReps.map((r) =>
       r.id === parsed.id
@@ -104,5 +104,5 @@ export async function completePracticeRep(formData: FormData) {
 
 /** Helper to get current state — thin wrapper for use in server components */
 export async function fetchState() {
-  return getState();
+  return await getState();
 }

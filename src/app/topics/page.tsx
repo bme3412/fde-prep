@@ -24,7 +24,7 @@ export default async function TopicsPage(props: {
   searchParams: Promise<{ status?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const state = getState();
+  const state = await getState();
   const filterStatus = searchParams.status as Status | undefined;
 
   const filtered = filterStatus

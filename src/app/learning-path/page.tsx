@@ -255,8 +255,8 @@ function statusLabel(status: Status): string {
   }
 }
 
-export default function LearningPathPage() {
-  const state = getState();
+export default async function LearningPathPage() {
+  const state = await getState();
   const topicsById = new Map(state.topics.map((t) => [t.id, t]));
 
   // Phase progress: count done / total

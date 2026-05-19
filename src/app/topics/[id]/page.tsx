@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TopicDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const state = getState();
+  const state = await getState();
   const topic = state.topics.find((t) => t.id === id);
   if (!topic) return notFound();
 
