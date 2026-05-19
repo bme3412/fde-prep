@@ -44,10 +44,10 @@ export function StudyTimer({ topicId, initialSeconds }: Props) {
   // Refs for values read inside intervals / event listeners without
   // re-creating the effect on every state change.
   const bufferRef = useRef(0);
-  const lastActivityRef = useRef<number>(Date.now());
-  const hasFocusRef = useRef<boolean>(
-    typeof window !== "undefined" ? document.hasFocus() : false,
-  );
+  // Initialized in the effect below — Date.now() / document.hasFocus() are
+  // impure and must not be called during render.
+  const lastActivityRef = useRef<number>(0);
+  const hasFocusRef = useRef<boolean>(false);
 
   /** Send buffered seconds to the server. Returns true on success. */
   const flushFetch = async (): Promise<void> => {
@@ -93,8 +93,10 @@ export function StudyTimer({ topicId, initialSeconds }: Props) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Initialize activity timestamp so we count a fresh tab as active.
+    // Initialize activity timestamp + focus state so we count a fresh tab
+    // as active. These are impure reads kept out of render.
     lastActivityRef.current = Date.now();
+    hasFocusRef.current = document.hasFocus();
 
     const markActivity = () => {
       lastActivityRef.current = Date.now();
