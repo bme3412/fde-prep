@@ -2852,7 +2852,252 @@ echo "Deployment to $TARGET complete!"`,
     },
 
     // ================================================================
-    // 15. What to practice next
+    // 15. Bash for the Anthropic API: curl + jq in anger
+    // ================================================================
+    {
+      title: "Bash for the Anthropic API: curl + jq in anger",
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `As an FDE you will hit the Anthropic API from the terminal more often than you expect: smoke-testing a customer's prompt before opening Python, reproducing a bug from a curl log, running a quick eval against 50 prompts, checking latency p95 on a fresh model. The Python SDK is your default — but \`curl | jq\` is what you reach for when you need an answer in 30 seconds, not 3 minutes.
+
+This section drills the three patterns you will use constantly:
+
+1. **Single-shot curl** to \`/v1/messages\` with a hand-rolled JSON body
+2. **jq** to pluck \`content[0].text\`, usage tokens, and stop reasons out of the response
+3. **xargs** to fan a prompt list out to N parallel requests with a concurrency cap
+
+Everything here uses the public Anthropic Messages API surface. The point is not to memorize the JSON shape — it is to memorize the **bash plumbing** so you stop fighting the shell and start solving the customer's problem.`,
+        },
+        {
+          kind: "method_ref",
+          title: "Anthropic API one-liners (Messages)",
+          importLine: `export ANTHROPIC_API_KEY="sk-ant-..."  # always read from env, never hardcode`,
+          methods: [
+            {
+              signature: `curl https://api.anthropic.com/v1/messages \\
+  -H "x-api-key: $ANTHROPIC_API_KEY" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H "content-type: application/json" \\
+  -d '{"model":"claude-opus-4-5","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}'`,
+              description: `Smallest possible Messages call. Required headers: x-api-key, anthropic-version, content-type. Required body fields: model, max_tokens, messages.`,
+              returns: `JSON response with id, type, role, content[], model, stop_reason, usage{input_tokens, output_tokens}`,
+            },
+            {
+              signature: `... | jq -r '.content[0].text'`,
+              description: `Extract just the assistant's text. -r drops the surrounding quotes so you can pipe it onward (into another command, into a file, etc.).`,
+            },
+            {
+              signature: `... | jq '{tokens: .usage, stop: .stop_reason}'`,
+              description: `Quick health-check: did we hit max_tokens? How many tokens did this cost? Best habit for any eval loop.`,
+            },
+            {
+              signature: `... | jq -c '.content[] | select(.type=="tool_use") | {name, input}'`,
+              description: `Filter tool_use blocks out of a response with tools. -c gives one compact JSON object per line — perfect for piping into another tool.`,
+            },
+            {
+              signature: `curl -N ... -d '{"stream": true, ...}' | jq -c --unbuffered 'select(.type=="content_block_delta") | .delta.text'`,
+              description: `Stream tokens. -N disables curl's output buffering; --unbuffered makes jq flush each event as it arrives. Without both flags streaming "works" but feels frozen.`,
+            },
+            {
+              signature: `cat prompts.txt | xargs -P 5 -I{} curl -s ... -d '{"messages":[{"role":"user","content":"{}"}]}' > out.ndjson`,
+              description: `Fan out one curl per line of prompts.txt, 5 in parallel. Output is concatenated JSONL — readable by jq, pandas, DuckDB, anything.`,
+            },
+          ],
+        },
+        {
+          kind: "code_predict",
+          label: "extract the assistant's reply with jq -r",
+          code: `# response.json contains:
+# {
+#   "id": "msg_01ABC",
+#   "type": "message",
+#   "role": "assistant",
+#   "content": [
+#     {"type": "text", "text": "Hello! How can I help?"}
+#   ],
+#   "model": "claude-opus-4-5",
+#   "stop_reason": "end_turn",
+#   "usage": {"input_tokens": 12, "output_tokens": 8}
+# }
+
+cat response.json | jq -r '.content[0].text'`,
+          output: `Hello! How can I help?`,
+          explanation: `.content is an array of blocks; .content[0] picks the first block; .text gets its text field. -r ("raw") strips the JSON quotes so the output is plain text suitable for piping. Without -r you would see "Hello! How can I help?" with literal quotes around it.`,
+        },
+        {
+          kind: "code_predict",
+          label: "compute total tokens across a JSONL eval log",
+          code: `# eval_results.ndjson — one JSON response per line, 3 lines total:
+# {"usage":{"input_tokens":120,"output_tokens":45},"stop_reason":"end_turn"}
+# {"usage":{"input_tokens":80,"output_tokens":200},"stop_reason":"end_turn"}
+# {"usage":{"input_tokens":150,"output_tokens":300},"stop_reason":"max_tokens"}
+
+jq -s '[.[].usage.output_tokens] | add' eval_results.ndjson`,
+          output: `545`,
+          explanation: `jq -s ("slurp") reads the whole stream into one array. .[].usage.output_tokens emits one number per record; wrapping in [ ... ] re-collects them; | add sums. 45 + 200 + 300 = 545. This is the bash equivalent of pandas df["output_tokens"].sum() — fast enough for thousand-line logs.`,
+        },
+        {
+          kind: "code_predict",
+          label: "find every response that hit max_tokens",
+          code: `# eval_results.ndjson (same 3 lines as above):
+# {"id":"msg_a","usage":{"output_tokens":45},"stop_reason":"end_turn"}
+# {"id":"msg_b","usage":{"output_tokens":200},"stop_reason":"end_turn"}
+# {"id":"msg_c","usage":{"output_tokens":300},"stop_reason":"max_tokens"}
+
+jq -r 'select(.stop_reason == "max_tokens") | .id' eval_results.ndjson`,
+          output: `msg_c`,
+          explanation: `select(...) is jq's WHERE clause — it keeps records matching the predicate and drops the rest. This is the single most useful jq idiom for evals: which prompts ran out of room, which timed out, which errored. Pipe to wc -l to count.`,
+        },
+        {
+          kind: "warm_up",
+          title: "fill in the curl headers",
+          prompt: `An Anthropic Messages API call requires three headers. Fill in the missing two:
+
+\`\`\`bash
+curl https://api.anthropic.com/v1/messages \\
+  -H "x-api-key: $ANTHROPIC_API_KEY" \\
+  -H "_______________: 2023-06-01" \\
+  -H "_______________: application/json" \\
+  -d '...'
+\`\`\``,
+          answer: `anthropic-version, content-type`,
+          explanation: `anthropic-version is required on every request — it pins the response schema to a known version. content-type tells the server you are sending JSON. Forgetting anthropic-version is the #1 cause of "why is this giving a 400" when copy-pasting curl from a different SDK.`,
+        },
+        {
+          kind: "code_predict",
+          label: "fan-out with xargs -P (parallel curl)",
+          code: `# prompts.txt:
+# Summarize the French Revolution in one sentence.
+# Explain why the sky is blue, briefly.
+# What is the capital of Mongolia?
+
+# How many curl processes run at once?
+cat prompts.txt | xargs -P 3 -I{} -d '\\n' \\
+  curl -s https://api.anthropic.com/v1/messages \\
+    -H "x-api-key: $ANTHROPIC_API_KEY" \\
+    -H "anthropic-version: 2023-06-01" \\
+    -H "content-type: application/json" \\
+    -d '{"model":"claude-opus-4-5","max_tokens":100,"messages":[{"role":"user","content":"{}"}]}' \\
+  >> out.ndjson`,
+          output: `3`,
+          explanation: `-P 3 sets the parallelism cap. xargs spawns up to 3 curl processes concurrently and as soon as one finishes, starts the next from the queue. -I{} swaps the prompt into the JSON body. -d '\\n' tells xargs to split input on newlines only (so prompts can contain spaces). Append (>>) is safe because each curl writes one line atomically — but for production evals you want a per-record tempfile + concat to be 100% safe.`,
+        },
+        {
+          kind: "code_comparison",
+          label: "sequential vs parallel eval loops",
+          left: {
+            title: "Sequential (the obvious version)",
+            code: `while IFS= read -r prompt; do
+  curl -s https://api.anthropic.com/v1/messages \\
+    -H "x-api-key: $ANTHROPIC_API_KEY" \\
+    -H "anthropic-version: 2023-06-01" \\
+    -H "content-type: application/json" \\
+    -d "{\\"model\\":\\"claude-opus-4-5\\",\\"max_tokens\\":100,
+        \\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"$prompt\\"}]}" \\
+    >> out.ndjson
+done < prompts.txt
+# 100 prompts × ~2s each = ~3.5 minutes`,
+            annotation: `One request at a time. Easy to read, but every prompt waits for the previous to finish.`,
+          },
+          right: {
+            title: "Parallel with xargs -P",
+            code: `cat prompts.txt | xargs -P 10 -I{} -d '\\n' \\
+  curl -s https://api.anthropic.com/v1/messages \\
+    -H "x-api-key: $ANTHROPIC_API_KEY" \\
+    -H "anthropic-version: 2023-06-01" \\
+    -H "content-type: application/json" \\
+    -d '{"model":"claude-opus-4-5","max_tokens":100,
+         "messages":[{"role":"user","content":"{}"}]}' \\
+  >> out.ndjson
+# 100 prompts ÷ 10 parallel ≈ 20 seconds`,
+            annotation: `-P 10 caps concurrency. ~10x faster on 100 prompts — the network IO overlaps.`,
+          },
+          takeaway: `For ad-hoc eval loops, xargs -P is hard to beat: zero code, built into every box, gives you a tunable concurrency knob. The only thing it does not give you is structured retry on 429/529 — for that, drop into Python.`,
+        },
+        {
+          kind: "scenario_predict",
+          label: "rate-limit retry with curl",
+          scenario: `RESP=$(curl -s -w "\\n%{http_code}" https://api.anthropic.com/v1/messages \\
+  -H "x-api-key: $ANTHROPIC_API_KEY" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H "content-type: application/json" \\
+  -d '{"model":"claude-opus-4-5","max_tokens":100,
+       "messages":[{"role":"user","content":"hi"}]}')
+
+CODE=$(echo "$RESP" | tail -n1)
+BODY=$(echo "$RESP" | sed '$d')
+
+if [[ "$CODE" == "429" ]]; then
+  echo "rate-limited, sleeping"
+  sleep 5
+fi`,
+          language: "bash",
+          question: `Why use \`-w "\\n%{http_code}"\` plus \`tail\`/\`sed\` instead of just \`curl -s\` and checking the body?`,
+          answer: `Because curl exits 0 even on HTTP 429 — the response body is "successful" from curl's perspective. You need the actual HTTP status code to branch on, and -w "%{http_code}" is how you ask curl to print it.`,
+          explanation: `curl's exit code is about whether the network call succeeded (got bytes back), not whether the server liked the request. To branch on 429 / 529 / 5xx you must capture the HTTP code separately. The "\\n" before %{http_code} puts it on its own line so you can split body and code with tail/sed. The cleaner alternative is curl -o body.json -w "%{http_code}" — write the body to a file and let curl print just the status code to stdout.`,
+        },
+        {
+          kind: "mini_challenge",
+          title: "Eval one-liner: success rate + p95 latency",
+          prompt: `You ran 100 prompts through the Messages API and captured each response (with \`-w '%{http_code} %{time_total}\\n'\` appended) into \`eval.ndjson\`. The status code and latency live on the **last line** after each JSON body, like:
+
+\`\`\`
+{"id":"msg_a","content":[...],"usage":{...},"stop_reason":"end_turn"}
+200 1.245
+{"type":"error","error":{...}}
+429 0.082
+\`\`\`
+
+In bash (no Python), compute:
+1. The **success rate** (fraction of 200s)
+2. The **p95 latency** of successful requests`,
+          hints: [
+            "awk is the right tool — it lets you split on whitespace, compare strings, and accumulate counters in one pass.",
+            "For the success rate: count lines matching '^200 ' and divide by total status lines.",
+            "For p95: extract the latency column for 200s with awk, sort numerically, and pick the 95th index. p95 of 100 values = the 95th value when sorted ascending.",
+            "Combining both: a single awk pass for the success rate, plus a pipe-based one-liner for p95.",
+          ],
+          solution: `# 1. Success rate
+TOTAL=$(grep -E '^[0-9]{3} ' eval.ndjson | wc -l)
+OK=$(grep -E '^200 ' eval.ndjson | wc -l)
+echo "success rate: $(awk -v ok=$OK -v t=$TOTAL 'BEGIN{printf "%.2f%%\\n", 100*ok/t}')"
+
+# 2. p95 latency of successful requests
+grep -E '^200 ' eval.ndjson \\
+  | awk '{print $2}' \\
+  | sort -n \\
+  | awk 'BEGIN{c=0} {a[c++]=$1} END{print a[int(c*0.95)]}'
+
+# Or, a single awk that does both:
+awk '
+  /^[0-9]{3} / { total++; if ($1=="200") { ok++; lat[++n]=$2 } }
+  END {
+    printf "success: %.2f%%\\n", 100*ok/total
+    # sort lat[] — awk does not have a built-in sort, so use asort()
+    asort(lat)
+    printf "p95: %.3fs\\n", lat[int(n*0.95)]
+  }
+' eval.ndjson`,
+          takeaway: `This is the canonical FDE move: "we shipped a new prompt — what's the success rate and tail latency?" You should be able to write this in under 60 seconds without googling. awk handles the streaming aggregation; sort -n handles ordering; arithmetic is one line of awk. No Python, no pandas, no overhead — just the right two tools composed.`,
+        },
+        {
+          kind: "flashcard",
+          front: `When should you reach for **bash + curl + jq** vs. the **Anthropic Python SDK**?`,
+          back: `**Bash** when you need an answer fast and the loop is tiny: smoke-test one prompt, scan a streaming SSE response, sanity-check a header, fan 50 prompts out for a quick eval.
+
+**Python SDK** when you need: retries with backoff and jitter, typed responses, complex tool loops, streaming with cancellation, anything you will check into git. Rule of thumb: if you would catch an exception, you want the SDK.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Mental model",
+          insight: `**Every Anthropic API workflow in bash is the same three-stage pipeline:** \`curl\` (get JSON over the wire) → \`jq\` (extract / filter / reshape) → \`xargs\` or \`awk\` (loop / aggregate). Memorize one full example per stage and you can build any ad-hoc eval, smoke test, or production triage tool in seconds.`,
+        },
+      ],
+    },
+
+    // ================================================================
+    // 16. What to practice next
     // ================================================================
     {
       title: "What to practice next",
@@ -2872,6 +3117,7 @@ echo "Deployment to $TARGET complete!"`,
 - **jq** — JSON processing
 - **curl** — API interaction and debugging
 - **Environment variables** — configuration management
+- **Anthropic API in anger** — curl + jq + xargs for smoke tests, evals, and triage
 
 **What to practice next:**
 

@@ -938,7 +938,384 @@ git stash pop
     },
 
     // ================================================================
-    // 14. What to practice next
+    // 14. Worktrees: parallel branches without re-cloning
+    // ================================================================
+    {
+      title: "Worktrees: parallel branches without re-cloning",
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `Most developers learn one git rule early: "your repo is on one branch at a time." That is wrong. Since git 2.5 you can have **multiple working directories** backed by the same \`.git\` — one per branch you want to touch in parallel.
+
+The pain worktrees solve is real and constant:
+
+- You are mid-edit on \`feature/big-refactor\` and a customer hits a P1 on \`main\`. You can stash, but stash is awkward when your edits span dozens of files and unsaved buffers.
+- You want to run the test suite on \`main\` while keeping your IDE pointed at your feature branch.
+- You are reviewing a coworker's PR and need to actually run their branch. Switching costs you context.
+- You want to bisect on a copy of the repo without disturbing your live work.
+
+A worktree is just **a second checkout of the repo**. Same \`.git\` storage (no extra disk for objects), separate working directory, separate index, separate HEAD. You move between them with \`cd\`, not \`git checkout\`.
+
+The mental model: **one repo, many working copies.** Each working copy is a complete checkout that happens to share storage with the others.`,
+        },
+        {
+          kind: "method_ref",
+          title: "Worktree commands",
+          importLine: `# All run from inside any worktree — they all share the same .git`,
+          methods: [
+            {
+              signature: `git worktree add ../wt-main main`,
+              description: `Create a new working directory at ../wt-main with branch "main" checked out. The path can be anywhere — a sibling directory keeps things tidy.`,
+            },
+            {
+              signature: `git worktree add -b hotfix/auth ../wt-hotfix main`,
+              description: `Create a new branch "hotfix/auth" off main AND check it out into ../wt-hotfix in one command. This is the most common form.`,
+            },
+            {
+              signature: `git worktree list`,
+              description: `Show every worktree, its path, its HEAD commit, and which branch is checked out there.`,
+              returns: `One line per worktree, with the main one marked.`,
+            },
+            {
+              signature: `git worktree remove ../wt-hotfix`,
+              description: `Delete a worktree's working directory and unregister it. Safer than rm -rf because it refuses if there are uncommitted changes.`,
+            },
+            {
+              signature: `git worktree prune`,
+              description: `Clean up administrative records of worktrees whose directories were deleted manually (rm -rf'd by accident).`,
+            },
+          ],
+        },
+        {
+          kind: "code_predict",
+          label: "spawn a hotfix worktree while keeping feature work intact",
+          code: `# Starting state:
+# /repo (on feature/big-refactor, ~30 uncommitted files)
+#
+# Customer reports auth bug on main. You need to fix it
+# WITHOUT touching your refactor work.
+
+cd /repo
+git worktree add -b hotfix/auth ../repo-hotfix main
+cd ../repo-hotfix
+git branch --show-current
+git status --short
+ls /repo /repo-hotfix | head -5  # both directories exist`,
+          output: `hotfix/auth
+`,
+          explanation: `git worktree add -b hotfix/auth ../repo-hotfix main does three things atomically: creates a new branch "hotfix/auth" off main, materializes a fresh working directory at ../repo-hotfix, and checks the new branch out there. Your original /repo is untouched — still on feature/big-refactor with all 30 dirty files. Both directories share the same .git, so commits in one are visible from the other instantly. After cd ../repo-hotfix, git branch --show-current prints hotfix/auth. git status --short shows no changes because the new working dir is a clean checkout of main.`,
+        },
+        {
+          kind: "code_predict",
+          label: "what happens if you try to check out a branch already in another worktree?",
+          code: `# /repo            → on main
+# /repo-feature    → on feature/dashboard (a separate worktree)
+
+cd /repo
+git checkout feature/dashboard`,
+          output: `fatal: 'feature/dashboard' is already checked out at '/repo-feature'`,
+          explanation: `Git enforces that a branch is checked out in at most one worktree. This is a feature, not a bug — it prevents two working directories from racing each other on the same branch. If you really want to operate on that branch in /repo, either remove the other worktree first or use a detached HEAD checkout (git checkout feature/dashboard@{0}).`,
+        },
+        {
+          kind: "code_comparison",
+          label: "stash vs worktree for context switching",
+          left: {
+            title: "Stash (the reflex move)",
+            code: `# On feature branch with dirty files
+git stash push -m "WIP refactor"
+git checkout main
+# ... fix the bug, commit, push ...
+git checkout feature/big-refactor
+git stash pop
+# Hope nothing conflicts. Re-open all your IDE tabs.`,
+            annotation: `Cheap, but every switch destroys your IDE state, breakpoints, terminal cwd, and running dev servers.`,
+          },
+          right: {
+            title: "Worktree (the FDE move)",
+            code: `# On feature branch with dirty files — leave them
+git worktree add -b hotfix/auth ../repo-hotfix main
+cd ../repo-hotfix
+# Open a SECOND IDE window here.
+# ... fix the bug, commit, push, PR ...
+cd ../repo            # original is exactly as you left it
+git worktree remove ../repo-hotfix`,
+            annotation: `Zero impact on your in-flight work. Run two dev servers, two IDEs, two test watchers — they cannot collide because they live in separate directories.`,
+          },
+          takeaway: `Use stash for ~30-second context switches. Use worktrees for anything longer or anything that involves running code (tests, dev servers, debuggers). Worktrees cost ~zero disk because the .git database is shared.`,
+        },
+        {
+          kind: "flashcard",
+          front: `What is the difference between a **branch** and a **worktree**?`,
+          back: `A **branch** is a movable pointer to a commit, living inside \`.git/refs/heads/\`. It costs essentially nothing.
+
+A **worktree** is a **working directory + index + HEAD** — an actual checkout of files on disk. Every worktree has exactly one branch (or a detached HEAD) checked out at any moment.
+
+You can have many branches; you typically have one worktree. Worktrees let you have several at once, each with a different branch checked out.`,
+        },
+        {
+          kind: "mini_challenge",
+          title: "Bisect without disturbing live work",
+          prompt: `You are debugging a regression: tests pass at \`v1.4.0\` but fail on \`main\`. You want to \`git bisect\` to find the offending commit — but your current branch \`feature/charts\` has hours of uncommitted work and you cannot afford to switch.
+
+Use a **worktree** to do the bisect entirely in a sibling directory, without touching \`feature/charts\`. Show the full sequence of commands.`,
+          hints: [
+            "Create a new worktree off main in ../repo-bisect.",
+            "cd into it, then run git bisect start with HEAD as bad and v1.4.0 as good.",
+            "After bisect finds the offending commit, clean up by removing the worktree.",
+          ],
+          solution: `# 1. Spawn a clean worktree on main, leaving your feature work alone.
+git worktree add ../repo-bisect main
+cd ../repo-bisect
+
+# 2. Start the bisect.
+git bisect start
+git bisect bad HEAD          # current main is broken
+git bisect good v1.4.0       # this tag was known-good
+
+# 3. Git checks out the midpoint. Run tests, mark good/bad.
+# (Loop: pytest && git bisect good   OR   git bisect bad)
+# ...
+
+# 4. Once git prints "<sha> is the first bad commit", note it down.
+git bisect reset
+
+# 5. Tear down. Your feature/charts working dir is untouched.
+cd ../repo
+git worktree remove ../repo-bisect`,
+          takeaway: `Bisect modifies HEAD repeatedly — running it inside your active worktree means losing context every iteration. Worktrees turn bisect into a side-channel operation: spin up a parallel checkout, drive bisect there, throw it away when done. Same trick works for reviewing PRs, running long-form test suites, or trying out a coworker's branch.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Rule of thumb",
+          insight: `If you are about to \`git stash\` so you can switch branches, **pause and consider a worktree instead.** Stash is for sub-minute pivots; worktrees are for anything that involves running code on the other branch. They cost essentially zero disk (shared object database) and zero brain (no "what did I stash?" later).`,
+        },
+      ],
+    },
+
+    // ================================================================
+    // 15. Rescue scenarios: "I just screwed up"
+    // ================================================================
+    {
+      title: 'Rescue scenarios: "I just screwed up"',
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `Git is much harder to actually break than it feels. Almost every commit you make is preserved in the **reflog** for 30+ days, even if it is no longer reachable from any branch. The rescue patterns below cover ~95% of the "oh no" moments you will hit:
+
+- Committed to the wrong branch
+- Force-pushed something bad
+- Lost a commit after a \`reset --hard\`
+- Deleted a branch that still had work on it
+- Resolved a merge conflict wrong and committed
+- Accidentally committed a secret
+
+The throughline: **the reflog records every move HEAD has made**, and \`git reset --hard <sha>\` can teleport you to any of those moments. If you can find the sha, you can recover the state.`,
+        },
+        {
+          kind: "key_insight",
+          label: "The first thing to do when panicked",
+          insight: `**Stop. Run \`git reflog\`.** Do not run another mutating git command until you have read the reflog and identified the sha you want to go back to. Most "I lost my work" stories are really "I forgot to look at the reflog first."`,
+        },
+        {
+          kind: "code_predict",
+          label: "rescue: committed to main, meant to commit to a feature branch",
+          code: `# You did:
+#   git commit -m "wip: dashboard tweaks"
+#   git commit -m "wip: dashboard tweaks 2"
+# ...on main. You meant to do it on a feature branch.
+# Nothing has been pushed yet.
+
+# main is currently:
+#   <sha-a> <- HEAD (main)  wip: dashboard tweaks 2
+#   <sha-b>                 wip: dashboard tweaks
+#   <sha-c>                 last real main commit
+
+# Goal: move those two commits to a new feature branch and
+# reset main back to <sha-c>.
+
+git branch feature/dashboard           # branch points at current HEAD (sha-a)
+git reset --hard <sha-c>               # main now back to sha-c
+git checkout feature/dashboard         # feature branch still has both commits`,
+          output: `Switched to branch 'feature/dashboard'`,
+          explanation: `git branch <name> creates a branch pointing at HEAD without moving HEAD. Now both main and feature/dashboard point at sha-a. git reset --hard sha-c moves only main backwards — feature/dashboard still holds the commits. Finally git checkout feature/dashboard puts you on the branch you should have been on the whole time. Key insight: **branches are pointers**. Adding a new pointer is free; deleting a pointer does not delete the commits underneath.`,
+        },
+        {
+          kind: "code_predict",
+          label: "rescue: I ran `git reset --hard` and lost an hour of work",
+          code: `# You had a commit "fix: rate limit on /chat" — sha was b7f3a91.
+# You ran:  git reset --hard HEAD~5
+# git log no longer shows b7f3a91. Did you lose it?
+
+git reflog --date=relative | head -3
+# Output:
+#   a1b2c3d HEAD@{0}: reset: moving to HEAD~5
+#   b7f3a91 HEAD@{1}: commit: fix: rate limit on /chat
+#   ...
+
+git reset --hard b7f3a91
+echo "recovered"`,
+          output: `recovered`,
+          explanation: `Reflog records every HEAD movement. After a destructive reset, the previous HEAD sha is sitting in HEAD@{1}. git reset --hard <that-sha> teleports HEAD back. The commit was never deleted — git's garbage collector waits 30+ days before removing unreachable commits, giving you a generous recovery window. This is the most important rescue pattern in git.`,
+        },
+        {
+          kind: "code_predict",
+          label: "rescue: I force-pushed and overwrote a coworker's commits",
+          code: `# Branch state before your push:
+#   origin/feature/x:  ...A -> B -> C -> D  (D is your coworker's commit)
+#   local feature/x:   ...A -> B -> C        (you missed D when you rebased)
+#
+# You ran:  git push --force
+# Now origin/feature/x = ...A -> B -> C and D appears lost on the remote.
+
+# On your machine, find D in the reflog of origin/feature/x (if you fetched it before).
+# Or: ask your coworker. Or: GitHub keeps reflogs server-side too.
+
+# Locally:
+git reflog origin/feature/x | head -5
+# Or if you never fetched D:
+#   ask coworker for D's sha, or check GitHub's "branches/activity" UI
+
+# Recover by resetting the branch to include D again:
+git checkout feature/x
+git reset --hard <sha-of-D>
+git push --force-with-lease origin feature/x`,
+          output: `Branch feature/x reset to <sha-of-D> and force-pushed.`,
+          explanation: `Force-push is the most dangerous git operation because it rewrites server-side history. The recovery path depends on whether you (or anyone) fetched commit D locally — if so, your local reflog still has it. If not, ask the person whose commits you overwrote (they have D in their reflog) or check GitHub's branch activity UI which retains overwritten heads for a window. **Prevention is better:** use --force-with-lease, which refuses the push if the remote moved since you last fetched.`,
+        },
+        {
+          kind: "code_comparison",
+          label: "force-push vs force-push --with-lease",
+          left: {
+            title: "git push --force (dangerous)",
+            code: `git push --force origin feature/x
+# Overwrites origin/feature/x with your local
+# branch unconditionally. If a coworker pushed
+# while you were rebasing, their work is GONE
+# from origin (still in their reflog, but
+# nobody else's).`,
+            annotation: `Use only when you are certain nobody else has touched the branch.`,
+          },
+          right: {
+            title: "git push --force-with-lease (safe)",
+            code: `git push --force-with-lease origin feature/x
+# Only force-pushes if origin/feature/x still
+# points at the commit YOUR local thought it
+# did when you last fetched. If a coworker
+# pushed in the meantime, this command FAILS
+# loudly instead of silently overwriting them.`,
+            annotation: `What you should always use. Alias git push --force to this in your dotfiles.`,
+          },
+          takeaway: `--force-with-lease is the "are you sure?" version of --force. Same use case — rewriting a branch you rebased — but it refuses to clobber work it does not know about. The cost is zero; the safety win is real. Make it your default.`,
+        },
+        {
+          kind: "code_predict",
+          label: "rescue: deleted a branch that still had unique commits",
+          code: `# You ran:  git branch -D feature/old-experiment
+# git refused with a warning that the branch was unmerged,
+# but you used -D (force delete) anyway. The branch is gone.
+
+# Did you actually lose the commits?
+git reflog | grep "feature/old-experiment" | head -3
+# Output:
+#   e9c4b2a HEAD@{17}: checkout: moving from feature/old-experiment to main
+#   ...
+
+# That sha (e9c4b2a) was the tip of the deleted branch.
+git branch feature/old-experiment e9c4b2a
+echo "branch restored"`,
+          output: `branch restored`,
+          explanation: `Deleting a branch only removes the pointer in .git/refs/heads/. The commits themselves are still in the object database, unreachable but not yet collected. The reflog remembers every checkout, so the last time you were on feature/old-experiment, its tip sha was recorded. git branch <name> <sha> recreates the pointer. The commits "come back" because they were never actually gone.`,
+        },
+        {
+          kind: "warm_up",
+          title: "the one command to check before panicking",
+          prompt: `You just ran something destructive (\`reset --hard\`, \`branch -D\`, \`checkout\` over uncommitted work). What is the **first** command you should run before doing anything else?`,
+          answer: `git reflog`,
+          explanation: `git reflog shows every position HEAD has occupied recently (default ~90 days), with the sha and the operation that moved it there. Once you find the sha you want to be at, git reset --hard <sha> or git checkout <sha> -b <new-branch> gets you back. The reflog is per-clone — your reflog only knows about HEAD movements in your local repo, not someone else's.`,
+        },
+        {
+          kind: "code_predict",
+          label: "rescue: I accidentally committed a secret",
+          code: `# You committed and pushed:
+#   git add config.py    # contains ANTHROPIC_API_KEY = "sk-ant-..."
+#   git commit -m "config"
+#   git push origin main
+#
+# Within minutes you realize. Removing the line in a new
+# commit is NOT enough — the secret is still in history.
+
+# 1. ROTATE THE KEY FIRST. Right now. In the Anthropic console.
+#    Anything else you do is meaningless until the key is dead.
+
+# 2. Then rewrite history. For a single recent file:
+git rm --cached config.py
+git commit --amend --no-edit
+git push --force-with-lease origin main
+
+# Or, for a deep-history scrub of one file:
+git filter-repo --invert-paths --path config.py
+# (or BFG Repo-Cleaner if filter-repo is unavailable)
+git push --force origin --all`,
+          output: `(see comments)`,
+          explanation: `Rule one: **rotate the credential first**, always. Once it is on a remote, assume it is harvested — GitHub's API is scraped continuously for leaked secrets. The git rewrite is housekeeping, not security. amend works only if the bad commit is the last one and unpushed-or-just-pushed. filter-repo (or BFG) is the production move for older leaks; both rewrite every commit that touched the file, which means everyone must rebase off the new history.`,
+        },
+        {
+          kind: "flashcard",
+          front: `**\`git reset\`** vs **\`git revert\`** — when do you use which?`,
+          back: `**\`git reset\`** rewrites history by moving HEAD. Use on commits that are **only local** (not pushed). Destructive — the "undone" commits become unreachable from branches.
+
+**\`git revert\`** creates a new commit that undoes the changes of a previous one. History is appended, not rewritten. Use on commits that are **already pushed/shared**. Safe — the original commit stays in the log.
+
+Rule of thumb: **public history → revert. Private history → reset.** Reset is faster and cleaner, but using it on shared branches creates merge nightmares for everyone else.`,
+        },
+        {
+          kind: "mini_challenge",
+          title: "Reconstruct: I rebased onto the wrong branch",
+          prompt: `You meant to rebase \`feature/dashboard\` onto \`main\` but accidentally ran \`git rebase origin/release-v0.9\` (an old release branch). Now your feature branch has 14 unrelated commits prepended to it.
+
+You have **not pushed yet**. Recover the original \`feature/dashboard\` and rebase it correctly. Show the commands and explain why each is safe.`,
+          hints: [
+            "git reflog shows the state of HEAD just BEFORE the bad rebase started — find the sha labeled 'rebase ... (start)' or look for the move right before that.",
+            "git reset --hard <pre-rebase-sha> teleports the branch back. Because nothing has been pushed, this rewrites only local history.",
+            "Then redo the rebase, this time onto the correct branch.",
+          ],
+          solution: `# 1. Read the reflog. Look for the entry just before the bad rebase.
+git reflog --date=relative | head -20
+# Sample output:
+#   a1a1a1a HEAD@{0}: rebase finished: returning to refs/heads/feature/dashboard
+#   b2b2b2b HEAD@{1}: rebase (pick): apply X
+#   ...
+#   x9x9x9x HEAD@{12}: rebase (start): checkout origin/release-v0.9
+#   y8y8y8y HEAD@{13}: commit: add chart legend     <-- last good state
+
+# 2. Reset hard to the last good sha.
+git reset --hard y8y8y8y
+# feature/dashboard is now exactly as it was before the bad rebase.
+
+# 3. Verify, then redo the rebase correctly.
+git log --oneline -5     # sanity check
+git rebase main          # this time onto the right branch
+
+# Why this is safe: nothing was pushed. Reflog kept y8y8y8y alive
+# even though the bad rebase made it unreachable from feature/dashboard.`,
+          takeaway: `The same recovery shape works for any "I just ran a destructive operation": reflog → identify the sha just before the mistake → reset --hard. The only thing that changes the recipe is whether the bad state has been pushed. If it has, you owe everyone a heads-up before you force-push the correction.`,
+        },
+        {
+          kind: "key_insight",
+          label: "Mental model for recovery",
+          insight: `Every git rescue follows the same three steps:
+
+1. **Stop and breathe.** Do not run another mutating command.
+2. **Find the sha** of the state you want to be in — usually via \`git reflog\`, sometimes via \`git fsck --lost-found\` if reflog has been pruned.
+3. **Teleport to it** with \`git reset --hard <sha>\` (local) or \`git push --force-with-lease\` after re-resetting (shared).
+
+If the bad state has been pushed and other people have already fetched it, append: 4) **Tell everyone affected** — they will need to reset their local copies. Force-pushing without telling collaborators is how teams learn to fear git.`,
+        },
+      ],
+    },
+
+    // ================================================================
+    // 16. What to practice next
     // ================================================================
     {
       title: "What to practice next",
@@ -956,6 +1333,8 @@ git stash pop
 - **Undoing** — reset for local undo, revert for shared undo, reflog for recovery
 - **Cherry-pick and bisect** — surgical commit copying and binary search for bugs
 - **Remotes** — fetch before pull, sync forks with upstream
+- **Worktrees** — multiple branches checked out simultaneously, share one .git
+- **Rescue patterns** — reflog → find sha → reset --hard for every "oh no" moment
 
 To build real fluency, practice these patterns in a scratch repo. Create intentional messes and clean them up:
 
