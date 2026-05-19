@@ -154,6 +154,142 @@ auto-tagged with a category (billing | technical | sales), a sentiment
         },
       ],
     },
+    // ─── Section 1.5: Cost & latency math (runnable) ─────────────────────
+    {
+      title: "Cost & latency math you should do in your head",
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `## Before you recommend a pattern, do the math
+
+Customers don't decide between patterns on aesthetics — they decide on **cost per task, latency per task, and risk per task**. The escalation ladder from section 1 is also a *cost ladder*. Each rung up roughly multiplies the bill.
+
+You should be able to ballpark these numbers without a spreadsheet. The runnable cell below is the calculator I keep in muscle memory — tweak the prices, token counts, and turn counts to match a real customer.`,
+        },
+        {
+          kind: "code_predict",
+          label: "Pattern cost calculator (tweak it and re-run)",
+          code: `# USD per million tokens (Nov-2025 ballpark — check current pricing)
+PRICES = {
+    "haiku":  {"in": 0.80,  "out": 4.00},
+    "sonnet": {"in": 3.00,  "out": 15.00},
+    "opus":   {"in": 15.00, "out": 75.00},
+}
+
+def cost(model, in_tok, out_tok, n=1):
+    p = PRICES[model]
+    return n * (in_tok * p["in"] + out_tok * p["out"]) / 1_000_000
+
+# Single Opus call: 2k in, 500 out
+single  = cost("opus", 2000, 500)
+
+# Prompt chain x3: each call sees prior output (~3k in 500 out)
+chain   = cost("opus", 3000, 500, n=3)
+
+# Sectioning x3: independent subtasks (~2k in 500 out each)
+section = cost("opus", 2000, 500, n=3)
+
+# Voting x7: same prompt 7 times
+vote    = cost("opus", 2000, 500, n=7)
+
+# Eval-opt: 3 rounds = 6 calls (gen + eval)
+evalopt = cost("opus", 2500, 500, n=6)
+
+# Agent: 15 turns, context grows -> avg 4k in / 400 out per turn
+agent   = cost("opus", 4000, 400, n=15)
+
+for name, c in [("single", single), ("chain x3", chain),
+                ("section x3", section), ("vote x7", vote),
+                ("eval-opt x3 rounds", evalopt),
+                ("agent x15 turns", agent)]:
+    print(f"{name:22s} \${c:.4f}")`,
+          output: `single                 $0.0675
+chain x3               $0.2475
+section x3             $0.2025
+vote x7                $0.4725
+eval-opt x3 rounds     $0.4500
+agent x15 turns        $1.3500`,
+          explanation: `The numbers tell the story:
+- **Chain** is roughly N× a single call because each step still pays input cost (and inputs grow as prior outputs are carried forward).
+- **Sectioning** can be *cheaper* than a chain because each subtask sees only its own slice of input — same N output calls, but smaller inputs per call.
+- **Voting** is N× a single call at constant input — predictable but pure ensemble overhead.
+- **Eval-opt** is (gen + eval) × rounds — typically 2× a chain of the same length.
+- **Agent** is the outlier: 15 turns at growing context can be 20× a single call. Hard caps are the only thing standing between a customer and a surprise invoice.
+
+Try this: change \`"opus"\` to \`"sonnet"\` and re-run. The agent number drops from $1.35 to $0.27 — a 5× cost cut from one model swap. Routing is the pattern that lets you make this swap *per branch*.`,
+          runnable: true,
+        },
+        {
+          kind: "method_ref",
+          title: "Latency math (sequential model, T = one LLM call)",
+          importLine: "# Memorize these formulas — quote them in customer conversations",
+          methods: [
+            {
+              signature: "Single prompt",
+              description: "One call, one response.",
+              returns: "Latency ≈ T. Cost ≈ 1 call.",
+            },
+            {
+              signature: "Prompt chain (N steps)",
+              description: "Sequential — each call waits for the prior.",
+              returns: "Latency ≈ N × T. Cost ≈ N calls. Worst-case latency of the ladder for the same N.",
+            },
+            {
+              signature: "Sectioning (N independent subtasks)",
+              description: "Run in parallel via asyncio.gather or futures.",
+              returns: "Latency ≈ max(T_i) ≈ T. Cost ≈ sum of N calls. Same cost as chain, ~N× lower latency.",
+            },
+            {
+              signature: "Voting (N copies of same prompt)",
+              description: "Parallel, aggregate.",
+              returns: "Latency ≈ T (parallel). Cost ≈ N calls. Trade cost for reliability — never latency.",
+            },
+            {
+              signature: "Orchestrator-workers",
+              description: "Plan call + parallel worker calls + synthesis call.",
+              returns: "Latency ≈ T_plan + max(T_worker) + T_synth ≈ 3T. Cost ≈ (1 + N_workers + 1) calls.",
+            },
+            {
+              signature: "Evaluator-optimizer (R rounds)",
+              description: "Gen + eval per round, sequential.",
+              returns: "Latency ≈ 2R × T. Cost ≈ 2R calls. Aggressively cap R; benchmark plateau before shipping.",
+            },
+            {
+              signature: "Agent (K turns)",
+              description: "Sequential — each turn depends on the prior.",
+              returns: "Latency ≈ K × T_turn, where T_turn grows with context. Cost unbounded without caps.",
+            },
+          ],
+        },
+        {
+          kind: "scenario_predict",
+          label: "Doing the math in a live customer call",
+          language: "text",
+          scenario: `A customer is choosing between two designs for a 10k tasks/day pipeline:
+  Option A: Sonnet workflow — chain x3, each step ~3k in / 500 out
+  Option B: Opus agent     — avg 12 turns, ~4k in / 400 out per turn
+
+Pricing:
+  Sonnet: $3 / Mtok input,  $15 / Mtok output
+  Opus:   $15 / Mtok input, $75 / Mtok output`,
+          question: "What's the daily cost difference, and which would you pilot first?",
+          answer: "Option A per-task: 3 × (3000×3 + 500×15)/1e6 = 3 × 0.0165 = $0.0495. At 10k/day ≈ $495/day. Option B per-task: 12 × (4000×15 + 400×75)/1e6 = 12 × 0.090 = $1.08. At 10k/day ≈ $10,800/day. Option B is ~22× more expensive. Pilot Option A first; only escalate the *subset* of tasks where the chain demonstrably fails.",
+          explanation: "Customers often skip this math because per-call cost looks negligible. At any meaningful scale it isn't. A 22× cost difference is the kind of number that decides whether a project ships. FDEs who do this math in real-time during the customer call save weeks of bad scoping.",
+        },
+        {
+          kind: "flashcard",
+          front: "Order the patterns from cheapest to most expensive per task (assume the same model).",
+          back: "single < chain ≈ sectioning < orchestrator-workers < voting < eval-opt < agent. Cost scales with the number of LLM calls per task. Workflows have a fixed call count; agents have an unbounded one. Quoting this order in a customer conversation forces them to articulate why the extra cost is worth it.",
+        },
+        {
+          kind: "warm_up",
+          title: "Same task, three patterns — which latency wins?",
+          prompt: "You have three independent analyses (4 seconds each) to run on the same document. Compare end-to-end latency for: (a) prompt-chain of 3, (b) sectioning x3, (c) voting on one analysis with N=3.",
+          answer: "(a) Chain: 12s (sum). (b) Section: 4s (max). (c) Voting: 4s — but only runs one of the three analyses with 3 attempts at it, not the same task as (a) or (b).",
+          explanation: "Voting is structurally different: it runs the *same* prompt N times to reduce variance, not N different prompts to cover N dimensions. Confusing these two is the most common pattern-naming mistake in interviews.",
+        },
+      ],
+    },
     // ─── Section 2: Prompt chaining ───────────────────────────────────────
     {
       title: "Pattern 1 — Prompt chaining",
@@ -933,6 +1069,267 @@ If you skip steps, you're shipping a Lamborghini for someone who wanted a bicycl
           context: "The single most useful question to ask in an FDE customer conversation about agents.",
           front: "What question disarms the 'we want an agent' ask?",
           back: "'Walk me through, step by step, what a great outcome looks like for one specific case.' If they can walk you through 5 specific steps, the task is workflow-shaped — show them the chain or sectioning that maps to those steps. If their walk-through has 'and then the model figures out what to do next' in it, that's the seam where an agent might be needed — and now you can scope the agent narrowly to that seam instead of treating the whole task as agentic.",
+        },
+      ],
+    },
+    // ─── Section 8: Hybrid patterns + lock-it-in ─────────────────────────
+    {
+      title: "Hybrid patterns & lock-it-in",
+      blocks: [
+        {
+          kind: "prose",
+          markdown: `## Most production systems are hybrids
+
+The decision framework is **per-subtask, not per-system**. When a customer says "should we use a workflow or an agent," the honest answer is usually *"yes."* Routing dispatches to a chain. The chain has an eval-opt loop inside one of its steps. The orchestrator's plan eventually calls an agent on the long-tail subtasks.
+
+Reading existing systems in this language — naming each layer — is what makes you useful in a kickoff meeting. The patterns aren't competitors; they're a *vocabulary* for decomposing systems.`,
+        },
+        {
+          kind: "code_predict",
+          label: "End-to-end hybrid: router → chain → bounded agent",
+          code: `# Deterministic stubs so the architecture runs without real LLM calls.
+# Each function represents what a real LLM call would do.
+
+def route(query):
+    q = query.lower()
+    if "refund" in q or "billing" in q: return "billing"
+    if "broken" in q or "error" in q:   return "technical"
+    return "agent"   # open-ended -> dynamic decision-making
+
+# --- Branch 1: billing -> prompt chain (3 known steps) ---
+def billing_chain(query):
+    extracted = f"order_id=12345"                     # step 1: extract
+    invoice   = f"INV-2024-12345 status=paid"         # step 2: lookup
+    return f"Found {invoice} ({extracted})"           # step 3: respond
+
+# --- Branch 2: technical -> single prompt + retrieval ---
+def technical_handler(query):
+    return f"[kb-hit] try restarting your device"
+
+# --- Branch 3: open-ended -> bounded agent loop ---
+def agent_loop(query, max_turns=5):
+    cost = 0.0
+    for turn in range(max_turns):
+        cost += 0.05                                  # each turn costs
+        if turn == 2:                                 # stub: model decides done
+            return f"agent-resolved at turn {turn}, cost USD {cost:.2f}"
+    return f"agent-hit-cap, cost USD {cost:.2f}"
+
+def system(query):
+    branch = route(query)
+    handlers = {"billing": billing_chain,
+                "technical": technical_handler,
+                "agent": agent_loop}
+    return f"[{branch}] {handlers[branch](query)}"
+
+queries = [
+    "I want a refund on my order",
+    "My device is broken and shows error 47",
+    "Can you find tickets like mine and reassign the closed ones?",
+]
+for q in queries:
+    print(system(q))`,
+          output: `[billing] Found INV-2024-12345 status=paid (order_id=12345)
+[technical] [kb-hit] try restarting your device
+[agent] agent-resolved at turn 2, cost USD 0.15`,
+          explanation: `This is the canonical hybrid shape: a **router** at the top, dispatching to a **chain** (billing), a **single handler** (technical), or a **bounded agent** (open-ended). Each branch's pattern is chosen for that branch's complexity:
+
+- Billing has 3 known steps → chain.
+- Technical has one prompt + retrieval → single call.
+- Open-ended needs decision-making → bounded agent with turn cap.
+
+The decision tree compounds. Each new subtask gets its own answer from the escalation ladder. Production systems are usually 3-5 of these patterns nested or chained, not one pattern at the root. Try editing the \`route()\` function above to add a fourth branch — say "feedback" → eval-opt — and re-run.`,
+          runnable: true,
+        },
+        {
+          kind: "scenario_predict",
+          label: "Name the patterns in a real architecture",
+          language: "text",
+          scenario: `A customer's existing support assistant works as follows:
+1. Incoming ticket -> classifier -> "easy" | "medium" | "hard"
+2. Easy: Haiku with retrieval, single call.
+3. Medium: 3-step chain (retrieve -> draft -> tone-check).
+4. Hard: agent loop with retrieval, ticket-update, escalate tools; turn cap 20.
+5. For all 3 branches, a content-safety voter (5 votes, threshold 2) runs
+   on the final output before it ships.`,
+          question: "How many of the six patterns are in use, and which?",
+          answer: "Five of six: (1) routing — the classifier dispatches 3 ways. (2) single-prompt — easy branch. (3) chain — medium branch. (4) agent — hard branch with tools + cap. (5) voting — content-safety on every output. The only pattern not used is evaluator-optimizer. The system picks each branch's pattern to fit that branch's complexity.",
+          explanation: "When you can name each layer, you can talk to engineers about the right slice of the system to improve. 'The medium-tier chain is bottlenecked on the tone check' is a much better diagnosis than 'the assistant is slow.' Practice this naming on every system you encounter — production AI is almost always a stack of these patterns.",
+        },
+        {
+          kind: "mini_challenge",
+          title: "Replace an agent with a workflow (10× cost cut)",
+          prompt: `A customer has shipped this design:
+
+> "For every inbound resume, an agent loops up to 15 turns using tools:
+> parse_resume, score_skills, lookup_role_requirements, write_summary,
+> flag_concerns, and submit_decision."
+
+In production: 12-turn average, costs are 8× projection, and only 3 of 15
+turn-counts in a typical run actually use a tool — the rest are the
+model "thinking out loud."
+
+You're asked to redesign for ~10× lower cost without dropping accuracy.
+
+Write a 5-7 bullet brief identifying:
+(a) which pattern(s) to use,
+(b) where the LLM is still needed,
+(c) the smallest version you'd ship to validate the redesign before
+    fully replacing the agent.`,
+          hints: [
+            "The tool list is fixed and small (6 tools). Does that suggest the steps are knowable?",
+            "If you can sketch a flowchart of 'what should happen for any resume,' the task isn't agent-shaped.",
+            "Some tools are independent (score_skills vs lookup_role_requirements). What pattern exploits that?",
+            "The model 'thinking out loud' for 9 of 12 turns is a prompt-focus problem. Per-step prompts in a chain are more focused than a multi-tool agent prompt.",
+          ],
+          solution: `### Redesign brief
+
+**1. Pattern: prompt chain with sectioning inside step 2.**
+   - Step 1 (chain): \`parse_resume\` → structured JSON.
+   - Step 2 (section, parallel): \`score_skills\` + \`lookup_role_requirements\` + \`flag_concerns\` run concurrently on the parsed JSON.
+   - Step 3 (chain): \`write_summary\` using parsed JSON + step-2 results.
+   - Step 4 (deterministic): \`submit_decision\` against a confidence threshold from step 3.
+
+**2. Where the LLM lives:**
+   - LLM does: parsing, skill scoring, summarization, concern-flagging.
+   - LLM does NOT: \`lookup_role_requirements\` (DB query against the customer's job descriptions) or \`submit_decision\` (deterministic rule on confidence).
+
+**3. Cost ballpark:**
+   - Old: 12 turns × Opus with growing context → ~$1+ per resume.
+   - New: 4 calls × Sonnet → ~$0.08 per resume. **~12× cheaper.**
+
+**4. Week-1 validation:**
+   - Shadow-run the new design on 200 historical resumes alongside the agent.
+   - Measure: % final-decision agreement, per-step disagreement breakdown, latency, cost.
+   - If agreement ≥ 95% on decisions, ship the redesign behind a feature flag.
+
+**5. Where the agent might still belong (residual):**
+   - The 5% of resumes where step-3 confidence is low → chain escalates to a *bounded* agent (max 5 turns) for those only.
+   - This turns the agent from "the system" into "the fallback for the long tail" — which is the right shape.
+
+**6. What to measure post-launch:**
+   - Cost per resume (must drop ~10×).
+   - Decision agreement vs. human reviewers (must not drop).
+   - Fraction of resumes hitting the agent fallback (should be < 10%).`,
+          takeaway: "The hardest design move is to *remove* the LLM from steps that don't need it. Once you do, the agent shrinks to the actual hard part: the long tail. Cost goes down, accuracy stays up, and the agent becomes defensible because it's only on the cases that need it.",
+        },
+        {
+          kind: "warm_up",
+          title: "Cold recall: name the six patterns",
+          prompt: "From memory (no scrolling), list the six patterns in cheapest-to-most-expensive order, with one line on when to reach for each.",
+          answer: `1. Single prompt — one well-crafted call. Default for narrow tasks.
+2. Prompt chain — N sequential calls with gates. Use when steps decompose cleanly.
+3. Routing — classify then dispatch. Use for heterogeneous inputs.
+4. Parallelization (sectioning/voting) — fan out independent subtasks or duplicate prompts for variance reduction.
+5. Orchestrator-workers — plan + parallel dispatch + synthesize. Use when the plan depends on the input.
+6. Evaluator-optimizer — gen + critique loop. Use when there's a writable quality rubric.
+7. Agent — LLM in a loop with tools. Use when steps aren't knowable in advance.`,
+          explanation: "Reciting the ladder is the difference between vague hand-waving in customer conversations and a confident structured answer. If you stumbled, the line you stumbled on is the one to revisit. Most people forget orchestrator-workers exists and jump from parallelization to agent — which is exactly the over-escalation pattern this guide is designed to prevent.",
+        },
+        {
+          kind: "warm_up",
+          title: "Cold recall: the disarm question",
+          prompt: "A customer opens with 'we want an agent.' Write the single question you ask in response to figure out whether they actually need one.",
+          answer: "'Walk me through, step by step, what a great outcome looks like for one specific case.'",
+          explanation: "If they name 5 specific steps → the task is workflow-shaped. If their walk-through contains 'and then the model figures out what to do next' → that's the seam where an agent might live. The question reframes 'agent vs not' into 'what's the actual decomposition,' which is the conversation you want to be having.",
+        },
+        {
+          kind: "multiple_choice",
+          title: "Cold recall: structural difference",
+          prompt: "Which is the cleanest one-sentence way to distinguish orchestrator-workers from a multi-agent system?",
+          choices: [
+            {
+              text: "Orchestrator-workers is faster.",
+              correct: false,
+              rationale: "Not structural — and not necessarily true at small scale.",
+            },
+            {
+              text: "Orchestrator-workers has fixed control-flow depth (plan → dispatch → synthesize); multi-agent has emergent, recursive control flow.",
+              correct: true,
+              rationale: "This is the structural answer. Orchestrator-workers always terminates after one pass; multi-agent has agents that can decide to act repeatedly and talk to each other.",
+            },
+            {
+              text: "Orchestrator-workers uses smaller models for workers.",
+              correct: false,
+              rationale: "An implementation choice, not a structural distinction. Workers can be any model.",
+            },
+            {
+              text: "Multi-agent always has more agents than orchestrator-workers.",
+              correct: false,
+              rationale: "Misses the point. A 2-agent system with bidirectional control is still multi-agent; a 50-worker orchestrator is still orchestrator-workers.",
+            },
+          ],
+          explanation: "The structural property — fixed-depth vs emergent control flow — is what determines cost predictability, debugging difficulty, and failure modes. Most pitches that say 'multi-agent' are actually orchestrator-workers, and labeling them accurately changes the engineering effort estimate dramatically.",
+        },
+        {
+          kind: "code_predict",
+          label: "BUG HUNT — find the missing guardrails (then fix and re-run)",
+          code: `# This "production agent" is missing three of the seven design-checklist
+# guardrails from section 7. Find them, then add them, then re-run.
+
+def fake_llm_turn(turn, history):
+    # Stub: the "model" keeps calling a tool until turn >= 25
+    if turn < 25:
+        return {"stop_reason": "tool_use", "cost": 0.10}
+    return {"stop_reason": "end_turn", "cost": 0.10}
+
+def run_agent(task):
+    history = [task]
+    turn = 0
+    total_cost = 0.0
+    while True:
+        r = fake_llm_turn(turn, history)
+        total_cost += r["cost"]
+        # NOTE: no log line here
+        if r["stop_reason"] == "end_turn":
+            return {"result": "done", "turns": turn, "cost": total_cost}
+        history.append("tool_output_blob_" + "x" * 5000)  # context bloats
+        turn += 1
+
+out = run_agent("solve customer issue")
+print(out)`,
+          output: `{'result': 'done', 'turns': 25, 'cost': 2.6}`,
+          explanation: `Three guardrails missing from section 7's checklist:
+
+1. **No turn cap.** \`while True\` never bails. The fake model happened to terminate at 25 — a real one could go forever.
+2. **No cost ceiling.** \`total_cost\` is tracked but never checked against a budget.
+3. **No observability.** Zero log lines per turn, so a production operator can't diagnose what's happening.
+
+(And a fourth issue: the tool output is appended raw, with no truncation — context bloats turn-over-turn.)
+
+The fix is straightforward — borrow the bounded-agent pattern from section 7:
+
+\`\`\`python
+def run_agent(task, max_turns=10, max_cost_usd=1.0):
+    history, turn, total_cost = [task], 0, 0.0
+    while turn < max_turns:
+        r = fake_llm_turn(turn, history)
+        total_cost += r["cost"]
+        print(f"turn={turn} cost={total_cost:.2f} stop={r['stop_reason']}")
+        if total_cost > max_cost_usd:
+            return {"result": "cost_exceeded", "turns": turn, "cost": total_cost}
+        if r["stop_reason"] == "end_turn":
+            return {"result": "done", "turns": turn, "cost": total_cost}
+        history.append("tool_output_summary")  # truncated/summarized
+        turn += 1
+    return {"result": "turn_cap", "turns": max_turns, "cost": total_cost}
+\`\`\`
+
+That refactor saves ~$1.50 per runaway task and makes failures legible in logs. This is the cap + log + cost-ceiling trio in code form.`,
+          runnable: true,
+        },
+        {
+          kind: "key_insight",
+          label: "Spaced practice plan for this guide",
+          insight: `**Day 1 (today):** Finish all 9 sections. Don't peek at solutions.
+
+**Day 2:** Without opening the guide, sketch on paper: the 7-rung ladder, and the cost/latency formula for each. Then re-do the cost calculator without looking — change the model from Opus to Sonnet and recompute the agent number from memory.
+
+**Day 4:** Pick one real system you've worked on or seen. Label every layer with one of the patterns. If a layer doesn't fit cleanly, that's a sign it's a hybrid — break it down further.
+
+**Day 7:** Run the WBR mini-challenge from section 7 again, but this time the customer adds: *"and the system should also handle ad-hoc questions from execs throughout the week."* Redesign on the spot. The new requirement should push *one* part of the system to an agent while the rest stays sectioning. If you reach for an agent for the whole thing, revisit section 1.
+
+**Day 14:** Schedule a 30-minute mock customer call. Friend plays a customer who says "we want an agent for X." You apply the disarm question and the escalation ladder live. Goal: "what does a great outcome look like, step by step" should fall out of your mouth as the first response — that's when the framework has moved from knowledge to instinct.`,
         },
       ],
     },

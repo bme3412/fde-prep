@@ -40,65 +40,11 @@ export default async function TopicsPage(props: {
     {} as Record<Category, typeof filtered>,
   );
 
-  // Overall stats across the full curriculum (ignore filter for these)
-  const totalTopics = state.topics.length;
-  const doneCount = state.topics.filter((t) => t.status === "done").length;
-  const inProgressCount = state.topics.filter(
-    (t) => t.status === "in_progress",
-  ).length;
-  const totalMinutes = state.topics.reduce(
-    (sum, t) => sum + t.estimatedMinutes,
-    0,
-  );
-  const totalHours = Math.round(totalMinutes / 60);
-  const studiedMinutes = Math.floor(
-    state.topics.reduce((sum, t) => sum + t.secondsStudied, 0) / 60,
-  );
-  const studiedHours = Math.floor(studiedMinutes / 60);
-  const studiedMinRem = studiedMinutes % 60;
-
   return (
     <div className="space-y-8">
-      {/* ── Header & stats ─────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold">Applied AI Prep</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Interview prep curriculum — {totalTopics} topics, ~{totalHours}h of
-            material across {CATEGORIES.length - 1} categories.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2">
-            <div className="text-xs text-zinc-500">Total</div>
-            <div className="text-xl font-semibold">{totalTopics}</div>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2">
-            <div className="text-xs text-zinc-500">Done</div>
-            <div className="text-xl font-semibold text-green-700">
-              {doneCount}
-            </div>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2">
-            <div className="text-xs text-zinc-500">In progress</div>
-            <div className="text-xl font-semibold text-amber-700">
-              {inProgressCount}
-            </div>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2">
-            <div className="text-xs text-zinc-500">Est. hours</div>
-            <div className="text-xl font-semibold">{totalHours}</div>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2">
-            <div className="text-xs text-zinc-500">Studied</div>
-            <div className="text-xl font-semibold text-zinc-900 tabular-nums">
-              {studiedHours > 0
-                ? `${studiedHours}h ${studiedMinRem}m`
-                : `${studiedMinRem}m`}
-            </div>
-          </div>
-        </div>
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-2xl font-bold">Applied AI Prep</h1>
       </div>
 
       {/* ── Status filter ──────────────────────────────────────────────── */}
