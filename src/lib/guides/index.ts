@@ -11,6 +11,7 @@ import { contextManagersGeneratorsGuide } from "./context-managers-generators";
 import { dataclassesTypingPatternsGuide } from "./dataclasses-typing-patterns";
 import { duckdbLightweightEtlGuide } from "./duckdb-lightweight-etl";
 import { errorHandlingRetriesGuide } from "./error-handling-retries";
+import { evalDrivenDevelopmentGuide } from "./eval-driven-development";
 import { extendedThinkingPatternsGuide } from "./extended-thinking-patterns";
 import { filesApiCitationsGuide } from "./files-api-citations";
 import { gitGuide } from "./git";
@@ -45,6 +46,7 @@ const guides: StudyGuide[] = [
   dataclassesTypingPatternsGuide,
   duckdbLightweightEtlGuide,
   errorHandlingRetriesGuide,
+  evalDrivenDevelopmentGuide,
   extendedThinkingPatternsGuide,
   filesApiCitationsGuide,
   gitGuide,

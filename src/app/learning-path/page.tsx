@@ -175,6 +175,39 @@ const PHASES: Phase[] = [
   },
   {
     number: 6,
+    title: "Evals",
+    rationale:
+      "The FDE's first deliverable, and the discipline every later change depends on. Needs API fluency (Phase 5) to build a harness — but on a real engagement it comes before the prototype. No eval, no ship.",
+    items: [
+      {
+        id: "eval-driven-development",
+        title: "eval-driven development",
+        blurb: "The synthesis: golden sets, graders, P/R/F1, LLM-judge hardening, cost/latency gating. The spine of the whole role.",
+      },
+      {
+        id: "precision-recall-f1-for-llm-evals",
+        title: "precision, recall, F1 for LLM evals",
+        blurb: "The confusion-matrix metrics. Which error is more expensive decides which you optimize.",
+      },
+      {
+        id: "llm-as-judge-bias-modes",
+        title: "LLM-as-judge bias modes",
+        blurb: "Position, verbosity, self-preference, sycophancy — and the mitigation for each.",
+      },
+      {
+        id: "golden-datasets-contextual-retrieval-evals",
+        title: "golden datasets & retrieval evals",
+        blurb: "Build ground truth from real traffic. Freeze it. Never prompt-tune against it.",
+      },
+      {
+        id: "regression-testing-for-prompts",
+        title: "regression testing for prompts",
+        blurb: "Pin the set, re-run on every change, gate in CI. How you upgrade models without fear.",
+      },
+    ],
+  },
+  {
+    number: 7,
     title: "Retrieval + tool use",
     rationale:
       "Agents that can't retrieve or use tools well are just expensive chatbots. These are the agent prerequisites.",
@@ -202,7 +235,7 @@ const PHASES: Phase[] = [
     ],
   },
   {
-    number: 7,
+    number: 8,
     title: "Agent architecture (synthesis)",
     rationale:
       "Everything above shows up here. Don't skip ahead — agents are where pattern-mismatches get expensive.",
@@ -278,10 +311,10 @@ export default async function LearningPathPage() {
       <div>
         <h1 className="text-2xl font-bold">Learning Path</h1>
         <p className="text-sm text-zinc-600 mt-2 max-w-2xl">
-          A 7-phase sequence through the prep material. Each phase builds on the
-          prerequisites of the next. The fastest interview-readiness path is
-          phases 1, 2, 5, 7 in order — then circle back to whichever showed up
-          weakest in mocks.
+          An 8-phase sequence through the prep material. Each phase builds on
+          the prerequisites of the next. The fastest interview-readiness path is
+          phases 1, 2, 5, 6, 8 in order (tooling → python → API → evals →
+          agents) — then circle back to whichever showed up weakest in mocks.
         </p>
         <div className="mt-3 text-xs text-zinc-500">
           Overall progress: {grandDone}/{grandTotal} topics done
@@ -399,8 +432,8 @@ export default async function LearningPathPage() {
         <ul className="space-y-2 text-zinc-700">
           <li>
             <span className="font-semibold">Sprint (1 week):</span> Phase 1 day
-            1 · Phase 2 days 2–3 · Phase 3 day 4 · Phase 5 days 5–6 · Phase 7
-            day 7. Skip Phase 4 and 6 for now; backfill on demand.
+            1 · Phase 2 days 2–3 · Phase 5 day 4 · Phase 6 (evals) day 5 · Phase
+            8 days 6–7. Skip Phases 3, 4, 7 for now; backfill on demand.
           </li>
           <li>
             <span className="font-semibold">Steady (2–3 weeks):</span> 2–3
@@ -417,8 +450,9 @@ export default async function LearningPathPage() {
         <p className="text-xs text-zinc-500 pt-2 border-t border-zinc-100">
           Phases 1–3 are non-negotiable prerequisites. Phase 4 is parallel —
           jump there after Phase 2 if data is your weak spot. Phase 5 strictly
-          before Phase 6. Phase 7 reads as synthesis; doing it last makes every
-          prior concept click.
+          before Phases 6 and 7. Phase 6 (evals) is the discipline everything
+          else is measured by — do not skip it for interviews. Phase 8 reads as
+          synthesis; doing it last makes every prior concept click.
         </p>
       </section>
     </div>

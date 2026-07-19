@@ -191,6 +191,16 @@ export function seedState(): AppState {
 
     // ── Evals ────────────────────────────────────────────────────────────
     topic(
+      "Eval-driven development",
+      "evals",
+      "The FDE's first deliverable on any engagement: build the eval before the prototype. The full loop — collect real examples, define graders (programmatic / LLM-judge / human), measure a baseline, change one thing, re-measure, gate on green. Includes precision/recall/F1, hardening an LLM-as-judge against position/verbosity/self-preference bias, building a frozen golden set, and treating cost + latency as first-class metrics. The synthesis topic that ties every other eval topic together.",
+      120,
+      [
+        { label: "Anthropic docs — Develop tests & evals", url: "https://docs.anthropic.com/en/docs/build-with-claude/develop-tests" },
+        { label: "Anthropic cookbook — Prompt evaluations", url: "https://github.com/anthropics/anthropic-cookbook/tree/main/misc/prompt_evaluations.ipynb" },
+      ],
+    ),
+    topic(
       "Precision, recall, F1 for LLM evals",
       "evals",
       "Understand classification metrics applied to LLM outputs: when to optimize for precision vs recall, micro vs macro averaging, and how to build confusion matrices for multi-class prompt outputs.",
