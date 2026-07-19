@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getState } from "@/lib/store";
 import type { Status } from "@/lib/types";
 import { AgenticStatusButton } from "./AgenticStatusButton";
@@ -15,7 +16,12 @@ export const metadata: Metadata = {
 
 // ─── Curriculum data ───────────────────────────────────────────────────────
 
-type Concept = { term: string; gloss: string };
+type Concept = {
+  term: string;
+  gloss: string;
+  /** Optional id of a Topics-page article that covers this concept. */
+  topicId?: string;
+};
 
 type Stage = {
   number: number;
@@ -44,6 +50,7 @@ const STAGES: Stage[] = [
         term: "asyncio, task groups and cancellation",
         gloss:
           "Run many I/O operations at once on a single thread. Task groups launch a batch together and cancel the rest if one fails, so you don't leak half-finished work.",
+        topicId: "asyncio-semaphore-gather-patterns",
       },
       {
         term: "FastAPI lifespan and dependency injection",
@@ -54,6 +61,7 @@ const STAGES: Stage[] = [
         term: "Streaming responses",
         gloss:
           "Send bytes to the client as they're produced so the user sees output immediately, rather than waiting for the whole response to finish.",
+        topicId: "streaming-prompt-caching",
       },
       {
         term: "HTTP clients and connection pooling",
@@ -64,21 +72,25 @@ const STAGES: Stage[] = [
         term: "Rate limits, timeouts and exponential backoff",
         gloss:
           "Cap how fast you call, give every call a deadline, and wait progressively longer between retries (with a little randomness) so you don't pile onto a struggling service.",
+        topicId: "error-handling-retries-rate-limits",
       },
       {
         term: "Idempotency",
         gloss:
           "Design an operation so running it twice has the same effect as running it once — essential the moment retries can duplicate a request.",
+        topicId: "idempotency-request-ids",
       },
       {
         term: "Queues and background workers",
         gloss:
           "Hand slow jobs to a queue and process them in separate worker processes, so your API can answer quickly instead of blocking on long work.",
+        topicId: "async-job-queues-for-long-running-llm-work",
       },
       {
         term: "Typed exceptions and failure classification",
         gloss:
           "Model failures as distinct exception types and sort them into retryable / fatal / needs-a-human, so callers can react correctly instead of guessing.",
+        topicId: "error-handling-retries-rate-limits",
       },
     ],
     deliverable:
@@ -100,41 +112,49 @@ const STAGES: Stage[] = [
         term: "Structured outputs",
         gloss:
           "Force the model to return data that matches a schema (via tool-use or JSON mode) instead of free text you have to parse and pray over.",
+        topicId: "structured-output-patterns",
       },
       {
         term: "Pydantic schemas",
         gloss:
           "Declare the exact shape of your inputs and outputs; validation rejects malformed data right at the boundary before it spreads.",
+        topicId: "pydantic-v2-fundamentals",
       },
       {
         term: "Context construction",
         gloss:
           "Deliberately assemble what goes into the prompt — instructions, examples, retrieved facts — while staying inside a token budget.",
+        topicId: "token-counting-context-budgeting",
       },
       {
         term: "Token accounting",
         gloss:
           "Count tokens before you send. It controls cost, keeps you under the context limit, and helps you predict latency.",
+        topicId: "token-counting-context-budgeting",
       },
       {
         term: "Streaming",
         gloss:
           "Stream the model's tokens as they generate for a responsive feel and to catch failures earlier in the response.",
+        topicId: "streaming-prompt-caching",
       },
       {
         term: "Model routing",
         gloss:
           "Send each request to the cheapest model that can handle it, and escalate only the genuinely hard ones to a bigger model.",
+        topicId: "cascading-model-routing",
       },
       {
         term: "Prompt and model versioning",
         gloss:
           "Treat prompts and model choices as versioned artifacts you can roll back — not strings buried in an f-string somewhere.",
+        topicId: "prompt-versioning-registry",
       },
       {
         term: "Deterministic fallbacks",
         gloss:
           "When the model errors or is low-confidence, fall back to a rule, a cached answer, or a smaller model — never just throw an error at the user.",
+        topicId: "fallback-chains-across-providers",
       },
     ],
     deliverable:
@@ -153,16 +173,19 @@ const STAGES: Stage[] = [
         term: "Function tools",
         gloss:
           "Ordinary functions exposed to the model with a name, a description, and a schema for their arguments.",
+        topicId: "tool-use-loop-implementation",
       },
       {
         term: "Tool descriptions",
         gloss:
           "The plain-language spec the model reads to decide when and how to call a tool. Vague descriptions cause wrong calls more than anything else.",
+        topicId: "tool-design-for-agents",
       },
       {
         term: "Argument and result schemas",
         gloss:
           "Typed contracts for what goes into a tool and what comes back, validated in both directions.",
+        topicId: "tool-design-for-agents",
       },
       {
         term: "Read versus write tools",
@@ -183,6 +206,7 @@ const STAGES: Stage[] = [
         term: "Tool-result sanitization",
         gloss:
           "Clean and escape a tool's output before feeding it back to the model. Untrusted content here is a classic injection route.",
+        topicId: "prompt-injection-defenses",
       },
       {
         term: "Dynamic tool loading",
@@ -193,6 +217,7 @@ const STAGES: Stage[] = [
         term: "MCP clients and servers",
         gloss:
           "A standard where tools and data live in reusable servers that any MCP-aware client (like Claude) can discover and call.",
+        topicId: "mcp-servers",
       },
     ],
     deliverable:
@@ -211,16 +236,19 @@ const STAGES: Stage[] = [
         term: "ReAct-style loops",
         gloss:
           "The reason → act → observe cycle: the model thinks, calls a tool, reads the result, and loops until it's done.",
+        topicId: "tool-use-loop-implementation",
       },
       {
         term: "Router versus autonomous loop",
         gloss:
           "A router picks one path and stops; an autonomous loop keeps deciding its next step. Prefer the router whenever the steps are predictable.",
+        topicId: "workflow-vs-agent-decision-framework",
       },
       {
         term: "Planning only when required",
         gloss:
           "Don't force an explicit plan step for simple tasks. Add planning only when the task genuinely needs multi-step foresight.",
+        topicId: "building-effective-agents-anthropic",
       },
       {
         term: "Maximum turns",
@@ -231,6 +259,7 @@ const STAGES: Stage[] = [
         term: "Token and dollar budgets",
         gloss:
           "Per-task ceilings on tokens and cost that abort the run the moment they're crossed.",
+        topicId: "token-counting-context-budgeting",
       },
       {
         term: "Stop conditions",
@@ -251,6 +280,7 @@ const STAGES: Stage[] = [
         term: "Graceful degradation",
         gloss:
           "When the agent can't fully succeed, return a partial or qualified answer, or hand off — instead of failing hard.",
+        topicId: "circuit-breakers-graceful-degradation",
       },
       {
         term: "Deterministic post-processing",
@@ -275,6 +305,7 @@ const STAGES: Stage[] = [
         term: "Golden test sets",
         gloss:
           "A frozen, human-labeled set of real cases you measure every change against. Never tune your prompts against it.",
+        topicId: "golden-datasets-contextual-retrieval-evals",
       },
       {
         term: "Tool-selection accuracy",
@@ -295,6 +326,7 @@ const STAGES: Stage[] = [
         term: "Trajectory evaluation",
         gloss:
           "Grade the whole path the agent took, not just whether the final answer happened to be right.",
+        topicId: "eval-driven-development",
       },
       {
         term: "Multi-turn testing",
@@ -305,21 +337,25 @@ const STAGES: Stage[] = [
         term: "LLM judges with calibrated rubrics",
         gloss:
           "Use a model to grade outputs against a concrete rubric — but validate the judge against human labels first.",
+        topicId: "llm-as-judge-bias-modes",
       },
       {
         term: "Human review samples",
         gloss:
           "Regularly hand-check a sample of outputs to anchor and audit the automated scores.",
+        topicId: "human-in-the-loop-labeling",
       },
       {
         term: "Regression gates",
         gloss:
           "Automatically block a deploy when a key metric drops beyond an allowed tolerance.",
+        topicId: "regression-testing-for-prompts",
       },
       {
         term: "Latency and cost distributions",
         gloss:
           "Track p50 / p95 / p99 latency and cost per task — the tail, not just the average.",
+        topicId: "cost-latency-evals",
       },
       {
         term: "Failure-injection testing",
@@ -363,11 +399,13 @@ const STAGES: Stage[] = [
         term: "Short-term summarization",
         gloss:
           "Compress recent context so a long-running conversation stays within the model's window.",
+        topicId: "agent-memory-architectures",
       },
       {
         term: "Long-term retrieval",
         gloss:
           "Keep durable memory in an external store and fetch it on demand, rather than holding everything in context.",
+        topicId: "agent-memory-architectures",
       },
       {
         term: "Memory expiration and deletion",
@@ -388,6 +426,7 @@ const STAGES: Stage[] = [
         term: "Idempotent side effects",
         gloss:
           "Make external actions safe to re-run, so recovery doesn't double-charge or double-send.",
+        topicId: "idempotency-request-ids",
       },
       {
         term: "Human approval and editing",
@@ -409,6 +448,7 @@ const STAGES: Stage[] = [
         term: "Prompt injection and indirect injection",
         gloss:
           "Malicious instructions in the user's input (direct) or hidden in fetched content and tool results (indirect) that try to hijack the agent.",
+        topicId: "prompt-injection-defenses",
       },
       {
         term: "Capability-based permissions",
@@ -454,6 +494,7 @@ const STAGES: Stage[] = [
         term: "Data retention",
         gloss:
           "Explicit policies for how long data is kept and when it's purged.",
+        topicId: "soc2-hipaa-data-residency",
       },
       {
         term: "Kill switches",
@@ -464,6 +505,7 @@ const STAGES: Stage[] = [
         term: "Cost-abuse prevention",
         gloss:
           "Guard against runaway loops and malicious usage that quietly rack up a huge bill.",
+        topicId: "cost-monitoring-finops-for-llms",
       },
     ],
     deliverable:
@@ -482,16 +524,19 @@ const STAGES: Stage[] = [
         term: "Manager-as-tools",
         gloss:
           "A lead agent treats sub-agents as callable tools, keeping control centralized in one place.",
+        topicId: "multi-agent-orchestration",
       },
       {
         term: "Handoffs",
         gloss:
           "One agent transfers the task, along with its context, to another agent better suited to it.",
+        topicId: "multi-agent-orchestration",
       },
       {
         term: "Supervisor graphs",
         gloss:
           "A coordinator routes work among specialist agents along a defined set of edges.",
+        topicId: "multi-agent-orchestration",
       },
       {
         term: "Subgraphs",
@@ -502,6 +547,7 @@ const STAGES: Stage[] = [
         term: "Parallel specialists",
         gloss:
           "Run independent specialist agents at the same time and merge their results.",
+        topicId: "multi-agent-orchestration",
       },
       {
         term: "Context isolation",
@@ -550,6 +596,7 @@ const STAGES: Stage[] = [
         term: "Worker queues",
         gloss:
           "Background job processing kept separate from request handling so the API stays responsive.",
+        topicId: "async-job-queues-for-long-running-llm-work",
       },
       {
         term: "CI/CD",
@@ -585,16 +632,19 @@ const STAGES: Stage[] = [
         term: "Alerting",
         gloss:
           "Notify a human when SLOs breach or errors spike — before customers do.",
+        topicId: "observability-stack-for-llm-apps",
       },
       {
         term: "SLOs",
         gloss:
           "Explicit reliability targets (latency, availability) you commit to and measure against.",
+        topicId: "observability-stack-for-llm-apps",
       },
       {
         term: "Cost controls",
         gloss:
           "Budgets, caps, and per-tenant limits that keep spend predictable.",
+        topicId: "cost-monitoring-finops-for-llms",
       },
       {
         term: "Incident runbooks",
@@ -636,11 +686,13 @@ const STAGES: Stage[] = [
         term: "Evaluation results",
         gloss:
           "Real metrics from your eval suite, with the golden set described.",
+        topicId: "eval-driven-development",
       },
       {
         term: "Cost and latency measurements",
         gloss:
           "Actual numbers — dollars per task and p50/p95/p99 — not hand-waving.",
+        topicId: "cost-latency-evals",
       },
       {
         term: "Security model",
@@ -753,6 +805,8 @@ export default async function AgenticEngineeringPage() {
   const state = await getState();
   const statusOf = (id: string): Status =>
     state.agenticProgress[id] ?? "not_started";
+  // Only render article links whose target topic actually exists.
+  const topicIds = new Set(state.topics.map((t) => t.id));
 
   const allIds = STAGES.flatMap((s) =>
     s.concepts.map((c) => conceptId(s.number, c.term)),
@@ -936,7 +990,17 @@ export default async function AgenticEngineeringPage() {
                           {c.gloss}
                         </div>
                       </div>
-                      <AgenticStatusButton id={id} status={statusOf(id)} />
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <AgenticStatusButton id={id} status={statusOf(id)} />
+                        {c.topicId && topicIds.has(c.topicId) && (
+                          <Link
+                            href={`/topics/${c.topicId}`}
+                            className="text-sm text-zinc-600 hover:text-zinc-900 underline"
+                          >
+                            Open
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </li>
                 );
