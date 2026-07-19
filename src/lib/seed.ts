@@ -1184,5 +1184,6 @@ export function seedState(): AppState {
     topics,
     practiceReps,
     dailyLogs: [],
+    agenticProgress: {},
   };
 }

@@ -1,4 +1,11 @@
 import type { Metadata } from "next";
+import { getState } from "@/lib/store";
+import type { Status } from "@/lib/types";
+import { AgenticStatusButton } from "./AgenticStatusButton";
+
+// Always render from live state (progress toggles must reflect immediately),
+// matching the Topics page rather than being statically prerendered.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Agentic Engineering — Applied AI Prep",
@@ -733,7 +740,29 @@ const PROGRESSION = [
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
-export default function AgenticEngineeringPage() {
+/** Stable id for a concept, e.g. "s1-idempotency". */
+function conceptId(stageNumber: number, term: string): string {
+  const slug = term
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return `s${stageNumber}-${slug}`;
+}
+
+export default async function AgenticEngineeringPage() {
+  const state = await getState();
+  const statusOf = (id: string): Status =>
+    state.agenticProgress[id] ?? "not_started";
+
+  const allIds = STAGES.flatMap((s) =>
+    s.concepts.map((c) => conceptId(s.number, c.term)),
+  );
+  const totalConcepts = allIds.length;
+  const doneConcepts = allIds.filter((id) => statusOf(id) === "done").length;
+  const pct = totalConcepts
+    ? Math.round((doneConcepts / totalConcepts) * 100)
+    : 0;
+
   return (
     <div className="space-y-10">
       {/* ── Header / primer ─────────────────────────────────────────────── */}
@@ -750,6 +779,28 @@ export default function AgenticEngineeringPage() {
             trustworthy. This reorders the same material so reliability comes
             first and multi-agent complexity comes last — only after you can
             measure that it helps.
+          </p>
+        </div>
+
+        {/* Overall progress */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Overall progress
+            </div>
+            <div className="text-xs text-zinc-500">
+              {doneConcepts}/{totalConcepts} concepts done · {pct}%
+            </div>
+          </div>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="text-xs text-zinc-400 mt-2">
+            Tap a status pill to cycle it: Not Started → In Progress → Done.
+            Progress is saved automatically.
           </p>
         </div>
 
@@ -816,7 +867,14 @@ export default function AgenticEngineeringPage() {
       </nav>
 
       {/* ── Stages ──────────────────────────────────────────────────────── */}
-      {STAGES.map((stage) => (
+      {STAGES.map((stage) => {
+        const stageIds = stage.concepts.map((c) =>
+          conceptId(stage.number, c.term),
+        );
+        const stageDone = stageIds.filter(
+          (id) => statusOf(id) === "done",
+        ).length;
+        return (
         <section
           key={stage.number}
           id={`stage-${stage.number}`}
@@ -830,7 +888,7 @@ export default function AgenticEngineeringPage() {
               </span>
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                  Stage {stage.number}
+                  Stage {stage.number} · {stageDone}/{stage.concepts.length} done
                 </div>
                 <h2 className="text-lg font-bold text-zinc-900 leading-tight">
                   {stage.title}
@@ -865,16 +923,24 @@ export default function AgenticEngineeringPage() {
               What you&rsquo;ll learn
             </h3>
             <ul className="border border-zinc-200 rounded-lg bg-white divide-y divide-zinc-100">
-              {stage.concepts.map((c) => (
-                <li key={c.term} className="px-4 py-3">
-                  <div className="text-sm font-semibold text-zinc-900">
-                    {c.term}
-                  </div>
-                  <div className="text-sm text-zinc-600 mt-1 leading-relaxed">
-                    {c.gloss}
-                  </div>
-                </li>
-              ))}
+              {stage.concepts.map((c) => {
+                const id = conceptId(stage.number, c.term);
+                return (
+                  <li key={c.term} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-zinc-900">
+                          {c.term}
+                        </div>
+                        <div className="text-sm text-zinc-600 mt-1 leading-relaxed">
+                          {c.gloss}
+                        </div>
+                      </div>
+                      <AgenticStatusButton id={id} status={statusOf(id)} />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -888,7 +954,8 @@ export default function AgenticEngineeringPage() {
             </p>
           </div>
         </section>
-      ))}
+        );
+      })}
 
       {/* ── Capstone projects ───────────────────────────────────────────── */}
       <section id="projects" className="scroll-mt-4 space-y-4">

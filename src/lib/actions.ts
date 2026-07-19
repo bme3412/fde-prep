@@ -8,6 +8,7 @@ import {
   LogDailyInput,
   CompletePracticeRepInput,
   StartPracticeRepInput,
+  SetAgenticStatusInput,
 } from "./types";
 import { v4 as uuid } from "uuid";
 
@@ -100,6 +101,20 @@ export async function completePracticeRep(formData: FormData) {
   }));
 
   revalidatePath("/practice");
+}
+
+export async function setAgenticStatus(formData: FormData) {
+  const parsed = SetAgenticStatusInput.parse({
+    id: formData.get("id"),
+    status: formData.get("status"),
+  });
+
+  await mutateState((state) => ({
+    ...state,
+    agenticProgress: { ...state.agenticProgress, [parsed.id]: parsed.status },
+  }));
+
+  revalidatePath("/agentic-engineering");
 }
 
 /** Helper to get current state — thin wrapper for use in server components */

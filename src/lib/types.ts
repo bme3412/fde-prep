@@ -168,6 +168,9 @@ export const AppStateSchema = z.object({
   topics: z.array(TopicSchema),
   practiceReps: z.array(PracticeRepSchema),
   dailyLogs: z.array(DailyLogSchema),
+  // Per-concept status for the Agentic Engineering primer, keyed by a stable
+  // concept id (e.g. "s1-idempotency"). Defaulted so pre-feature state parses.
+  agenticProgress: z.record(z.string(), z.enum(STATUSES)).default({}),
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
@@ -196,6 +199,11 @@ export const CompletePracticeRepInput = z.object({
 
 export const StartPracticeRepInput = z.object({
   id: z.string(),
+});
+
+export const SetAgenticStatusInput = z.object({
+  id: z.string().min(1),
+  status: z.enum(STATUSES),
 });
 
 // ── Study-time tracking input ──────────────────────────────────────────────
