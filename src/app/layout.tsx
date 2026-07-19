@@ -35,11 +35,11 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 font-sans">
         <header className="border-b border-zinc-200 bg-white">
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             <Link href="/topics" className="font-semibold text-lg tracking-tight">
               Applied AI Prep
             </Link>
-            <nav className="flex gap-4 text-sm">
+            <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
               {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}

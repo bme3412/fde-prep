@@ -222,13 +222,13 @@ export function CodeEditor({
   return (
     <div
       onKeyDownCapture={onKeyDownCapture}
-      className={`relative flex bg-[#1e293b] text-[#e2e8f0] overflow-x-auto ${className}`}
+      className={`code-editor-root relative flex bg-[#1e293b] text-[#e2e8f0] overflow-x-auto ${className}`}
       style={{ minHeight }}
     >
       {showLineNumbers && (
         <div
           aria-hidden="true"
-          className="select-none sticky left-0 z-10 bg-[#1e293b] text-right text-slate-500 border-r border-white/5"
+          className="code-editor-gutter select-none sticky left-0 z-10 bg-[#1e293b] text-right text-slate-500 border-r border-white/5"
           style={{
             fontFamily: editorStyle.fontFamily,
             fontSize: editorStyle.fontSize,

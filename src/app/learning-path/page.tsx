@@ -357,7 +357,7 @@ export default async function LearningPathPage() {
             className="scroll-mt-4 space-y-3"
           >
             <div className="border-b border-zinc-200 pb-2">
-              <h2 className="text-base font-semibold uppercase tracking-wide text-zinc-500 flex items-baseline gap-3">
+              <h2 className="text-base font-semibold uppercase tracking-wide text-zinc-500 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                 <span className="text-zinc-400">Phase {phase.number}</span>
                 <span className="text-zinc-800 normal-case tracking-normal">
                   {phase.title}

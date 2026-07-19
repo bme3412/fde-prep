@@ -20,7 +20,7 @@ export default async function LoginPage(props: {
           autoComplete="current-password"
           autoFocus
           required
-          className="w-full px-3 py-2 border border-zinc-300 rounded-md bg-white text-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+          className="w-full px-3 py-2 border border-zinc-300 rounded-md bg-white text-zinc-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
           placeholder="passcode"
         />
         {error && (

@@ -112,6 +112,30 @@ body {
   font-weight: 600;
 }
 
+/* On phones, let wide markdown tables scroll inside their own box instead of
+   stretching the page. */
+@media (max-width: 639px) {
+  .guide-prose table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* ── Code editor mobile font ───────────────────────────────────────────── */
+
+/* iOS Safari zooms the page when focusing any control with font-size < 16px.
+   The editor sets 15px via inline styles, so this needs !important — and it
+   must hit the highlight <pre>, the overlay <textarea>, and the line-number
+   gutter equally, because react-simple-code-editor requires their font
+   metrics to match exactly. */
+@media (max-width: 639px) {
+  .code-editor-root pre,
+  .code-editor-root textarea,
+  .code-editor-root .code-editor-gutter {
+    font-size: 16px !important;
+  }
+}
+
 /* ── Section checkbox celebration animations ───────────────────────────── */
 
 @keyframes section-checkbox-pop {

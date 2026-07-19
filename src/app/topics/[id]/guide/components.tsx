@@ -252,7 +252,7 @@ function SavedRunsPanel({
                   <button
                     type="button"
                     onClick={() => onDelete(r.id)}
-                    className="text-xs text-zinc-400 hover:text-red-600"
+                    className="text-xs text-zinc-400 hover:text-red-600 p-2 -m-2"
                     aria-label="Delete saved run"
                     title="Delete"
                   >
@@ -518,7 +518,7 @@ export function CodePredict({
               Scratch pad
             </span>
           </div>
-          <span className="text-[10px] uppercase tracking-wide font-mono text-zinc-400">
+          <span className="hidden sm:inline text-[10px] uppercase tracking-wide font-mono text-zinc-400">
             ⌘↵ run · ⌘S save · ⌘/ comment
           </span>
         </div>
@@ -630,7 +630,7 @@ export function ScenarioPredict({
               onChange={(e) => setUserGuess(e.target.value)}
               rows={2}
               placeholder="Type your answer..."
-              className="border border-zinc-200 rounded-lg px-3 py-2.5 text-sm w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              className="border border-zinc-200 rounded-lg px-3 py-2.5 text-base sm:text-sm w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
             />
             <button type="button" onClick={() => setRevealed(true)} className={BTN_PRIMARY_FULL}>
               Reveal Answer
@@ -877,7 +877,7 @@ export function MiniChallenge({
             onChange={(e) => setUserCode(e.target.value)}
             rows={8}
             spellCheck={false}
-            className="border border-zinc-200 rounded-lg px-3 sm:px-4 py-3 text-sm sm:text-[15px] leading-relaxed w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+            className="border border-zinc-200 rounded-lg px-3 sm:px-4 py-3 text-base sm:text-[15px] leading-relaxed w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
             placeholder="# Write your solution here..."
           />
         </div>
@@ -954,7 +954,7 @@ export function MethodRefBlock({ data }: { data: MethodRefData }) {
             className="w-full text-left px-4 py-3 hover:bg-zinc-50 transition-colors"
           >
             <div className="flex items-start justify-between gap-3">
-              <code className="text-sm sm:text-[15px] font-mono font-semibold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded shrink-0">
+              <code className="text-sm sm:text-[15px] font-mono font-semibold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded min-w-0 whitespace-pre-wrap break-words">
                 {method.signature}
               </code>
               <svg
@@ -1062,7 +1062,7 @@ export function WarmUpBlock({
               value={userAnswer}
               onChange={(e) => setUserAnswer(e.target.value)}
               placeholder="Your answer..."
-              className="border border-zinc-200 rounded-lg px-3 py-2.5 text-sm w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              className="border border-zinc-200 rounded-lg px-3 py-2.5 text-base sm:text-sm w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
               onKeyDown={(e) => e.key === "Enter" && setRevealed(true)}
             />
             <button type="button" onClick={() => setRevealed(true)} className={BTN_PRIMARY_FULL}>

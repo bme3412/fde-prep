@@ -68,7 +68,7 @@ export default async function TopicDetailPage(props: { params: Promise<{ id: str
               name="status"
               id="status"
               defaultValue={topic.status}
-              className="border border-zinc-200 rounded-lg px-3 py-2 text-sm bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300 min-w-[130px]"
+              className="border border-zinc-200 rounded-lg px-3 py-2 text-base sm:text-sm bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300 min-w-[130px]"
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>

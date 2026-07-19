@@ -85,8 +85,8 @@ export default async function LogPage({ searchParams }: { searchParams: SearchPa
 
       {/* Calendar */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="text-lg font-semibold">
               {MONTH_NAMES[month - 1]} {year}
             </h2>
