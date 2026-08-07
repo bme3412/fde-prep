@@ -529,14 +529,13 @@ export function CodePredict({
         )}
       </div>
 
-      {/* ── Scratch pad (runnable only) ─────────────────────────── */}
-      {isRunnable && (
+      {/* ── Try it: empty executable workspace under every predict ── */}
       <div className="border-t border-zinc-100">
         <div className="px-4 sm:px-5 py-3 bg-zinc-50 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
             <span className="text-xs font-semibold tracking-wide uppercase text-zinc-500">
-              Scratch pad
+              Try it
             </span>
           </div>
           <span className="hidden sm:inline text-[10px] uppercase tracking-wide font-mono text-zinc-400">
@@ -550,7 +549,7 @@ export function CodePredict({
             language="python"
             minLines={scratchLines}
             showLineNumbers
-            placeholder="# Try your own Python — runs in the same Pyodide kernel as the primary block."
+            placeholder="# Type Python here and run it — empty workspace for experimenting."
             ariaLabel="Scratch pad code"
           />
         </div>
@@ -559,7 +558,7 @@ export function CodePredict({
             <RunButton
               status={scratchStatus}
               onClick={runScratch}
-              idleLabel="Run scratch"
+              idleLabel="Run code"
               doneLabel="Run again"
             />
             <button
@@ -599,7 +598,6 @@ export function CodePredict({
             </div>
           )}
 
-          {/* Saved runs ─ collapsible history of manually-saved snapshots. */}
           {savedRuns.length > 0 && (
             <SavedRunsPanel
               runs={savedRuns}
@@ -612,7 +610,6 @@ export function CodePredict({
           )}
         </div>
       </div>
-      )}
     </div>
   );
 }
