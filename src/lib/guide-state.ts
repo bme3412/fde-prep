@@ -14,30 +14,44 @@
  */
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import {
+  GUIDE_STATE_CHANGE_EVENT,
+  GUIDE_STATE_PREFIX,
+  guideStateKey,
+  isProgressUnitDone,
+  sectionDoneScope,
+  slugify,
+} from "./guide-state-utils";
 
-const PREFIX = "fde-prep:guide:v1:";
-const CHANGE_EVENT = "fde-prep:guide-state-change";
-
-function keyFor(scope: string): string {
-  return PREFIX + scope;
-}
+export {
+  GUIDE_STATE_PREFIX,
+  isProgressUnitDone,
+  sectionDoneScope,
+  slugify,
+};
 
 /** Dispatched after any local write so same-tab subscribers update. */
 function notifyChange(): void {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(CHANGE_EVENT));
+    window.dispatchEvent(new Event(GUIDE_STATE_CHANGE_EVENT));
   }
 }
 
 /** Subscribe to both cross-tab `storage` and same-tab change events. */
-function subscribe(callback: () => void): () => void {
+export function subscribeGuideState(callback: () => void): () => void {
   if (typeof window === "undefined") return () => {};
   window.addEventListener("storage", callback);
-  window.addEventListener(CHANGE_EVENT, callback);
+  window.addEventListener(GUIDE_STATE_CHANGE_EVENT, callback);
   return () => {
     window.removeEventListener("storage", callback);
-    window.removeEventListener(CHANGE_EVENT, callback);
+    window.removeEventListener(GUIDE_STATE_CHANGE_EVENT, callback);
   };
+}
+
+/** Read a persisted JSON value for a scope, or null if missing/corrupt. */
+export function readPersistedRaw(scope: string): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(guideStateKey(scope));
 }
 
 /**
@@ -55,10 +69,10 @@ export function usePersistedState<T>(
 ): [T, (next: T | ((prev: T) => T)) => void, () => void] {
   const getSnapshot = useCallback(() => {
     if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(keyFor(scope));
+    return window.localStorage.getItem(guideStateKey(scope));
   }, [scope]);
 
-  const raw = useSyncExternalStore(subscribe, getSnapshot, () => null);
+  const raw = useSyncExternalStore(subscribeGuideState, getSnapshot, () => null);
 
   const value = useMemo<T>(() => {
     if (raw == null) return initial;
@@ -81,7 +95,7 @@ export function usePersistedState<T>(
           ? (next as (prev: T) => T)(value)
           : next;
       try {
-        window.localStorage.setItem(keyFor(scope), JSON.stringify(resolved));
+        window.localStorage.setItem(guideStateKey(scope), JSON.stringify(resolved));
         notifyChange();
       } catch {
         // localStorage full or disabled — silently degrade to in-memory only
@@ -92,18 +106,9 @@ export function usePersistedState<T>(
 
   const clear = useCallback(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.removeItem(keyFor(scope));
+    window.localStorage.removeItem(guideStateKey(scope));
     notifyChange();
   }, [scope]);
 
   return [value, setValue, clear];
-}
-
-/** Best-effort id derivation for use in localStorage keys. */
-export function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
 }

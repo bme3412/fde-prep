@@ -815,6 +815,18 @@ For each scenario below, decide which tool you'd reach for:`,
         {
           kind: "mini_challenge",
           title: "Trade summary",
+          runnable: true,
+          starterCode: `from collections import defaultdict
+
+trades = [("AAPL", 150.0), ("GOOG", 2800.0), ("AAPL", 151.25), ("GOOG", 2795.0), ("MSFT", 300.0)]
+
+# Build prices (list) and counts (int) with one loop.
+prices = ...
+counts = ...
+
+print(dict(prices))
+print(dict(counts))
+`,
           prompt: `Given a list of trades, produce two things using **one for loop**:
 1. A dict mapping each ticker to its **list of prices**
 2. A dict mapping each ticker to the **number of trades**
@@ -878,6 +890,15 @@ Now try the challenge:`,
         {
           kind: "mini_challenge",
           title: "Group anagram tickers",
+          runnable: true,
+          starterCode: `from collections import defaultdict
+
+def group_anagrams(words: list[str]) -> list[list[str]]:
+    # Group words that are anagrams of each other.
+    ...
+
+print(group_anagrams(["AAPL", "GOOG", "LPAA", "MSFT", "PAAL", "OGOG"]))
+`,
           prompt: `Given a list of strings, group all anagrams together.
 
 \`\`\`python

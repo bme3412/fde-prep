@@ -1,31 +1,24 @@
 import { getState } from "@/lib/store";
+import { PracticeClient } from "./client";
+
+export const dynamic = "force-dynamic";
 
 export default async function PracticePage() {
   const state = await getState();
+  const completed = state.practiceReps.filter((r) => r.completedAt).length;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Practice Reps</h1>
-      <p className="text-sm text-zinc-500">
-        {state.practiceReps.length} reps &middot;{" "}
-        {state.practiceReps.filter((r) => r.completedAt).length} completed
-      </p>
-      {state.practiceReps.map((rep) => (
-        <div key={rep.id} className="bg-white border border-zinc-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-semibold">{rep.title}</h2>
-            <span className="text-xs text-zinc-400">{rep.durationMinutes} min</span>
-          </div>
-          <p className="text-sm text-zinc-500">
-            {rep.completedAt
-              ? `Completed ${new Date(rep.completedAt).toLocaleDateString()}`
-              : "Not yet attempted"}
-          </p>
-          <p className="text-xs text-zinc-400 mt-2">
-            TODO: Expandable prompt markdown, start/complete buttons, retro notes form.
-          </p>
-        </div>
-      ))}
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900">Practice Reps</h1>
+        <p className="text-sm text-zinc-500 mt-1.5">
+          {state.practiceReps.length} reps &middot; {completed} completed
+        </p>
+        <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
+          Timed cold builds. Start the clock, work from the prompt, then capture a short retro.
+        </p>
+      </div>
+      <PracticeClient reps={state.practiceReps} />
     </div>
   );
 }

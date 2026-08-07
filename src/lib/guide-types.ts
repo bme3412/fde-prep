@@ -67,6 +67,8 @@ export interface WarmUp {
   answer: string;
   /** Why this is the answer */
   explanation: string;
+  /** How to compare the guess before reveal. Defaults to trim_lower. */
+  check?: "exact" | "trim_lower";
 }
 
 /** A coding mini-challenge with a reference solution */
@@ -81,6 +83,27 @@ export interface MiniChallenge {
   solution: string;
   /** Key takeaway */
   takeaway: string;
+  /** When true, show a Pyodide Run button with CodeEditor. */
+  runnable?: boolean;
+  /** Starter code for the workspace when runnable. */
+  starterCode?: string;
+}
+
+/** Descriptor for one interactive unit used by live guide progress %. */
+export type ProgressUnitKind =
+  | "code_predict"
+  | "scenario_predict"
+  | "warm_up"
+  | "multiple_choice"
+  | "mini_challenge"
+  | "flashcard_deck";
+
+export interface ProgressUnit {
+  kind: ProgressUnitKind;
+  /** localStorage scope suffix after topicSlug: (full key = PREFIX + scope) */
+  scope: string;
+  /** For flashcard decks — finished when persisted index >= cardCount */
+  cardCount?: number;
 }
 
 /** A markdown prose section (teaching content between interactive blocks) */

@@ -235,6 +235,20 @@ If you need SQL-style "group everything regardless of order," use \`defaultdict(
         {
           kind: "mini_challenge",
           title: "Group API responses by status",
+          runnable: true,
+          starterCode: `from itertools import groupby
+
+responses = [
+    {"url": "/users", "status": 200},
+    {"url": "/posts", "status": 404},
+    {"url": "/comments", "status": 200},
+    {"url": "/auth", "status": 500},
+    {"url": "/profile", "status": 200},
+    {"url": "/settings", "status": 404},
+]
+
+# Sort, then groupby status. Print count + URLs per group.
+`,
           prompt: `Given a list of API response dicts, group them by status code and print the count and URLs for each group:
 
 \`\`\`python

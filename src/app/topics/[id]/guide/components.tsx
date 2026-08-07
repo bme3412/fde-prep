@@ -20,6 +20,7 @@ import type {
   CodeComparison as CodeComparisonData,
   WarmUp as WarmUpData,
   MultipleChoice as MultipleChoiceData,
+  ProgressUnit,
 } from "@/lib/guide-types";
 import { runPython, type RunResult } from "@/lib/pyodide-runtime";
 import {
@@ -31,7 +32,13 @@ import {
   formatAbsolute,
   type SavedRun,
 } from "@/lib/saved-runs";
-import { usePersistedState, slugify } from "@/lib/guide-state";
+import {
+  usePersistedState,
+  slugify,
+  isProgressUnitDone,
+  readPersistedRaw,
+  subscribeGuideState,
+} from "@/lib/guide-state";
 import { CodeBlock } from "./CodeBlock";
 import { CodeEditor } from "./CodeEditor";
 
@@ -275,6 +282,7 @@ export function CodePredict({
   data: CodePredictData;
   topicSlug: string;
 }) {
+  const isRunnable = data.runnable === true;
   // Persisted state — edits + reveal survive reload.
   // Run output is transient (re-runs are cheap; cached Pyodide handles it).
   const persistScope = `${topicSlug}:code_predict:${slugify(data.label)}`;
@@ -414,7 +422,11 @@ export function CodePredict({
 
   return (
     <div className={CARD}>
-      <CardHeader dot="bg-zinc-800" label="Code Playground" meta={data.label} />
+      <CardHeader
+        dot={isRunnable ? "bg-emerald-500" : "bg-zinc-800"}
+        label={isRunnable ? "Runnable" : "Predict"}
+        meta={data.label}
+      />
 
       {/* Primary editable code block — syntax highlighted */}
       <div className="relative">
@@ -438,32 +450,40 @@ export function CodePredict({
       </div>
 
       <div className="p-4 sm:p-5 space-y-3">
-        {/* Run controls */}
-        <div className="flex flex-wrap items-center gap-3">
-          <RunButton
-            status={runStatus}
-            onClick={runPrimary}
-            idleLabel="Run code"
-            doneLabel="Run again"
-          />
-          {isEdited && (
-            <span className="text-xs text-amber-600 font-medium">Code edited</span>
-          )}
-          {runStatus === "loading" && (
-            <span className="text-xs text-zinc-500">
-              First run downloads Pyodide (~10MB). Cached after this.
-            </span>
-          )}
-        </div>
+        {isRunnable && (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <RunButton
+                status={runStatus}
+                onClick={runPrimary}
+                idleLabel="Run code"
+                doneLabel="Run again"
+              />
+              {isEdited && (
+                <span className="text-xs text-amber-600 font-medium">Code edited</span>
+              )}
+              {runStatus === "loading" && (
+                <span className="text-xs text-zinc-500">
+                  First run downloads Pyodide (~10MB). Cached after this.
+                </span>
+              )}
+            </div>
 
-        {/* Output */}
-        {runResult && (
-          <div className="text-sm space-y-1">
-            <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">
-              Output:
-            </span>
-            <RunOutput result={runResult} />
-          </div>
+            {runResult && (
+              <div className="text-sm space-y-1">
+                <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">
+                  Output:
+                </span>
+                <RunOutput result={runResult} />
+              </div>
+            )}
+          </>
+        )}
+
+        {!isRunnable && (
+          <p className="text-xs text-zinc-500">
+            Predict the output, then reveal the answer.
+          </p>
         )}
 
         {/* Optional explanation disclosure */}
@@ -473,9 +493,9 @@ export function CodePredict({
               <button
                 type="button"
                 onClick={() => setShowExplanation(true)}
-                className="text-xs text-zinc-500 hover:text-zinc-800 underline"
+                className={isRunnable ? "text-xs text-zinc-500 hover:text-zinc-800 underline" : BTN_PRIMARY_FULL}
               >
-                Show explanation
+                {isRunnable ? "Show explanation" : "Reveal output"}
               </button>
             ) : (
               <div className="space-y-3 border-t border-zinc-100 pt-3">
@@ -509,7 +529,8 @@ export function CodePredict({
         )}
       </div>
 
-      {/* ── Scratch pad ─────────────────────────────────────────── */}
+      {/* ── Scratch pad (runnable only) ─────────────────────────── */}
+      {isRunnable && (
       <div className="border-t border-zinc-100">
         <div className="px-4 sm:px-5 py-3 bg-zinc-50 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -591,6 +612,7 @@ export function CodePredict({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -823,11 +845,13 @@ export function MiniChallenge({
   data: MiniChallengeData;
   topicSlug: string;
 }) {
+  const isRunnable = data.runnable === true;
+  const starter = data.starterCode ?? "";
   const scope = `${topicSlug}:mini_challenge:${slugify(data.title)}`;
   const [state, setState] = usePersistedState(scope, {
     hintsRevealed: 0,
     showSolution: false,
-    userCode: "",
+    userCode: starter,
   });
   const { hintsRevealed, showSolution, userCode } = state;
   const setHintsRevealed = (updater: (n: number) => number) =>
@@ -837,9 +861,36 @@ export function MiniChallenge({
   const setUserCode = (v: string) =>
     setState((s) => ({ ...s, userCode: v }));
 
+  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const codeLines = Math.max(8, (userCode || starter).split("\n").length);
+
+  async function runUserCode() {
+    if (!userCode.trim()) return;
+    setRunStatus(
+      typeof window !== "undefined" && window.loadPyodide ? "running" : "loading",
+    );
+    try {
+      const result = await runPython(userCode);
+      setRunResult(result);
+    } catch (e) {
+      setRunResult({
+        stdout: "",
+        stderr: "",
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setRunStatus("done");
+    }
+  }
+
   return (
     <div className={CARD}>
-      <CardHeader dot="bg-amber-500" label="Challenge" meta={data.title} />
+      <CardHeader
+        dot="bg-amber-500"
+        label={isRunnable ? "Runnable Challenge" : "Challenge"}
+        meta={data.title}
+      />
 
       <div className="p-4 sm:p-5 space-y-5">
         {/* Prompt */}
@@ -868,18 +919,63 @@ export function MiniChallenge({
         )}
 
         {/* Workspace */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
             Your solution
           </label>
-          <textarea
-            value={userCode}
-            onChange={(e) => setUserCode(e.target.value)}
-            rows={8}
-            spellCheck={false}
-            className="border border-zinc-200 rounded-lg px-3 sm:px-4 py-3 text-base sm:text-[15px] leading-relaxed w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
-            placeholder="# Write your solution here..."
-          />
+          {isRunnable ? (
+            <>
+              <div className="rounded-lg overflow-hidden border border-zinc-200">
+                <CodeEditor
+                  value={userCode}
+                  onChange={setUserCode}
+                  language="python"
+                  minLines={codeLines}
+                  showLineNumbers
+                  ariaLabel="Challenge solution editor"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <RunButton
+                  status={runStatus}
+                  onClick={runUserCode}
+                  idleLabel="Run code"
+                  doneLabel="Run again"
+                />
+                {starter && userCode !== starter && (
+                  <button
+                    type="button"
+                    onClick={() => setUserCode(starter)}
+                    className="text-xs text-zinc-500 hover:text-zinc-800 underline"
+                  >
+                    Reset to starter
+                  </button>
+                )}
+                {runStatus === "loading" && (
+                  <span className="text-xs text-zinc-500">
+                    First run downloads Pyodide (~10MB). Cached after this.
+                  </span>
+                )}
+              </div>
+              {runResult && (
+                <div className="text-sm space-y-1">
+                  <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">
+                    Output:
+                  </span>
+                  <RunOutput result={runResult} />
+                </div>
+              )}
+            </>
+          ) : (
+            <textarea
+              value={userCode}
+              onChange={(e) => setUserCode(e.target.value)}
+              rows={8}
+              spellCheck={false}
+              className="border border-zinc-200 rounded-lg px-3 sm:px-4 py-3 text-base sm:text-[15px] leading-relaxed w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              placeholder="# Write your solution here..."
+            />
+          )}
         </div>
 
         {/* Solution */}
@@ -1030,6 +1126,14 @@ export function CodeComparisonBlock({ data }: { data: CodeComparisonData }) {
 
 // ── WarmUp — lightweight fill-in-the-blank ────────────────────────────────
 
+function normalizeWarmUpAnswer(
+  value: string,
+  mode: "exact" | "trim_lower",
+): string {
+  if (mode === "exact") return value;
+  return value.trim().toLowerCase();
+}
+
 export function WarmUpBlock({
   data,
   topicSlug,
@@ -1037,16 +1141,32 @@ export function WarmUpBlock({
   data: WarmUpData;
   topicSlug: string;
 }) {
+  const checkMode = data.check ?? "trim_lower";
   const scope = `${topicSlug}:warm_up:${slugify(data.title)}`;
   const [state, setState, clearState] = usePersistedState(scope, {
     revealed: false,
     userAnswer: "",
+    checked: false as boolean,
+    wasCorrect: null as boolean | null,
   });
-  const { revealed, userAnswer } = state;
+  const { revealed, userAnswer, checked, wasCorrect } = state;
   const setRevealed = (v: boolean) =>
     setState((s) => ({ ...s, revealed: v }));
   const setUserAnswer = (v: string) =>
-    setState((s) => ({ ...s, userAnswer: v }));
+    setState((s) => ({ ...s, userAnswer: v, checked: false, wasCorrect: null }));
+
+  function runCheck() {
+    const ok =
+      normalizeWarmUpAnswer(userAnswer, checkMode) ===
+      normalizeWarmUpAnswer(data.answer, checkMode);
+    setState((s) => ({
+      ...s,
+      checked: true,
+      wasCorrect: ok,
+      // Count as complete once checked (even if wrong) — user can still reveal.
+      revealed: ok ? true : s.revealed,
+    }));
+  }
 
   return (
     <div className={CARD}>
@@ -1063,14 +1183,31 @@ export function WarmUpBlock({
               onChange={(e) => setUserAnswer(e.target.value)}
               placeholder="Your answer..."
               className="border border-zinc-200 rounded-lg px-3 py-2.5 text-base sm:text-sm w-full font-mono bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300"
-              onKeyDown={(e) => e.key === "Enter" && setRevealed(true)}
+              onKeyDown={(e) => e.key === "Enter" && runCheck()}
             />
-            <button type="button" onClick={() => setRevealed(true)} className={BTN_PRIMARY_FULL}>
-              Check
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={runCheck} className={BTN_PRIMARY_FULL}>
+                Check
+              </button>
+              <button
+                type="button"
+                onClick={() => setRevealed(true)}
+                className="text-xs text-zinc-500 hover:text-zinc-800 underline"
+              >
+                Reveal answer
+              </button>
+            </div>
+            {checked && wasCorrect === false && (
+              <div className="text-sm font-semibold text-red-700">
+                Not quite — try again or reveal the answer.
+              </div>
+            )}
           </>
         ) : (
           <div className="space-y-3">
+            {wasCorrect === true && (
+              <div className="text-sm font-semibold text-emerald-700">Correct</div>
+            )}
             {userAnswer && (
               <div className="text-sm space-y-1">
                 <span className="text-zinc-400 text-xs font-medium uppercase tracking-wide">You said:</span>
@@ -1211,22 +1348,50 @@ export function MultipleChoiceBlock({
 
 // ── Progress tracker ───────────────────────────────────────────────────────
 
+function countByKind(units: ProgressUnit[], kind: ProgressUnit["kind"]): number {
+  return units.filter((u) => u.kind === kind).length;
+}
+
 export function GuideProgress({
-  totalPredicts,
-  totalScenarios,
-  totalChallenges,
-  totalFlashcardDecks,
-  totalWarmUps,
-  totalMCQs = 0,
+  topicSlug,
+  units,
 }: {
-  totalPredicts: number;
-  totalScenarios: number;
-  totalChallenges: number;
-  totalFlashcardDecks: number;
-  totalWarmUps: number;
-  totalMCQs?: number;
+  topicSlug: string;
+  units: ProgressUnit[];
 }) {
-  const total = totalPredicts + totalScenarios + totalChallenges + totalFlashcardDecks + totalWarmUps + totalMCQs;
+  const getSnapshot = useCallback(() => {
+    if (typeof window === "undefined") {
+      return units.map(() => "0").join("");
+    }
+    return units
+      .map((u) =>
+        isProgressUnitDone(u.kind, readPersistedRaw(u.scope), u.cardCount)
+          ? "1"
+          : "0",
+      )
+      .join("");
+  }, [units]);
+
+  const flags = useSyncExternalStore(
+    subscribeGuideState,
+    getSnapshot,
+    () => units.map(() => "0").join(""),
+  );
+
+  const done = useMemo(
+    () => [...flags].filter((c) => c === "1").length,
+    [flags],
+  );
+  const total = units.length;
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  const totalPredicts = countByKind(units, "code_predict");
+  const totalWarmUps = countByKind(units, "warm_up");
+  const totalMCQs = countByKind(units, "multiple_choice");
+  const totalScenarios = countByKind(units, "scenario_predict");
+  const totalFlashcardDecks = countByKind(units, "flashcard_deck");
+  const totalChallenges = countByKind(units, "mini_challenge");
+
   const items = [
     totalPredicts > 0 && `${totalPredicts} prediction${totalPredicts !== 1 ? "s" : ""}`,
     totalWarmUps > 0 && `${totalWarmUps} try-it${totalWarmUps !== 1 ? "s" : ""}`,
@@ -1237,11 +1402,25 @@ export function GuideProgress({
   ].filter(Boolean);
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline gap-x-1 gap-y-1 text-sm text-zinc-600">
-        <span className="font-semibold text-zinc-800">{total} exercises:</span>
-        <span>{items.join(" · ")}</span>
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-sm text-zinc-600">
+          <span className="font-semibold text-zinc-800">
+            {done}/{total} complete
+          </span>
+          <span className="text-zinc-400"> · {pct}%</span>
+        </div>
+        <span className="text-xs text-zinc-400 font-mono" title={topicSlug}>
+          {total} exercises
+        </span>
       </div>
+      <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-zinc-800 transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="text-xs text-zinc-500">{items.join(" · ")}</div>
     </div>
   );
 }

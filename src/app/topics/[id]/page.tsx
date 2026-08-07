@@ -2,7 +2,7 @@ import { getState } from "@/lib/store";
 import { updateTopicStatus, updateTopicNotes } from "@/lib/actions";
 import { getGuideForTopic } from "@/lib/guides";
 import { CATEGORY_LABELS, STATUS_LABELS, STATUSES } from "@/lib/types";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TopicDescription, TopicNotesForm } from "./client";
 import { StudyTimer } from "@/components/StudyTimer";
@@ -19,7 +19,6 @@ export default async function TopicDetailPage(props: { params: Promise<{ id: str
   if (!topic) return notFound();
 
   const hasGuide = getGuideForTopic(topic.title) !== null;
-  if (hasGuide) redirect(`/topics/${id}/guide`);
 
   return (
     <div className="max-w-3xl mx-auto px-1 sm:px-0">
